@@ -1260,3 +1260,117 @@ export const getDocumentStatusCounts = async (): Promise<StatusCountsResponse> =
   const response = await axiosInstance.get('/documents/status_counts')
   return response.data
 }
+
+// ===========================================================================
+// Quiz Generation API
+// ===========================================================================
+
+export type QuizDifficulty = 'easy' | 'medium' | 'hard'
+export type QuizMode = 'local' | 'global' | 'hybrid' | 'mix' | 'naive'
+export type QuizNumQuestions = 10 | 25 | 50
+
+export type QuizGenerateRequest = {
+  document_ids: string[]
+  mode: QuizMode
+  difficulty: QuizDifficulty
+  num_questions: QuizNumQuestions
+  run_verification: boolean
+  // Optional overrides (same semantics as QueryRequest)
+  top_k?: number
+  chunk_top_k?: number
+  max_entity_tokens?: number
+  max_relation_tokens?: number
+  max_total_tokens?: number
+  user_prompt?: string
+}
+
+export type QuizRetrievalMetadata = {
+  entities: string[]
+  relations: { source: string; target: string; type: string }[]
+  bfs_path: string[]
+  chunk_ids: string[]
+  hop_depth: number | null
+  source_documents: string[]
+  seed_query: string
+  seed_strategy: string
+}
+
+export type QuizGenerationMetadata = {
+  model: string
+  prompt_template_id: string
+  question: string
+  reference_answer: string
+}
+
+export type QuizVerificationMetadata = {
+  model: string
+  actual_retrieval_complexity: number
+  actual_reasoning_type: string
+  answerable_from_context: boolean
+  claimed_complexity_matches: boolean
+  claimed_reasoning_matches: boolean
+  notes: string
+}
+
+export type QuizQuestion = {
+  question_id: string
+  arm: 'graph' | 'naive' | 'other'
+  difficulty: QuizDifficulty
+  claimed_retrieval_complexity: number
+  claimed_reasoning_type: string
+  retrieval: QuizRetrievalMetadata
+  generation: QuizGenerationMetadata
+  verification?: QuizVerificationMetadata
+}
+
+export type QuizGenerateResponse = {
+  quiz_id: string
+  created_at: string
+  request: QuizGenerateRequest
+  questions: QuizQuestion[]
+  metadata_path: string
+  warnings: string[]
+}
+
+export type QuizSummary = {
+  quiz_id: string
+  created_at: string
+  mode: string
+  difficulty: string
+  num_questions: number
+  question_count: number
+  verifier_pass_rate?: number
+  metadata_path: string
+}
+
+/**
+ * Generate a quiz for the selected documents.
+ */
+export const generateQuiz = async (req: QuizGenerateRequest): Promise<QuizGenerateResponse> => {
+  const response = await axiosInstance.post('/quiz/generate', req)
+  return response.data
+}
+
+/**
+ * List all previously generated quizzes.
+ */
+export const listQuizzes = async (): Promise<QuizSummary[]> => {
+  const response = await axiosInstance.get('/quiz/list')
+  return response.data
+}
+
+/**
+ * Get a specific quiz by ID.
+ */
+export const getQuiz = async (quizId: string): Promise<QuizGenerateResponse> => {
+  const response = await axiosInstance.get(`/quiz/${encodeURIComponent(quizId)}`)
+  return response.data
+}
+
+/**
+ * Re-run Claude Sonnet verification on a stored quiz.
+ */
+export const reverifyQuiz = async (quizId: string): Promise<QuizGenerateResponse> => {
+  const response = await axiosInstance.post(`/quiz/${encodeURIComponent(quizId)}/verify`)
+  return response.data
+}

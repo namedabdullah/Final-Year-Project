@@ -47,6 +47,9 @@ function TabsNavigation() {
         <NavigationTab value="retrieval" currentTab={currentTab}>
           {t('header.retrieval')}
         </NavigationTab>
+        <NavigationTab value="quiz" currentTab={currentTab}>
+          {t('header.quiz')}
+        </NavigationTab>
         <NavigationTab value="api" currentTab={currentTab}>
           {t('header.api')}
         </NavigationTab>

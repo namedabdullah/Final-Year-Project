@@ -4,9 +4,17 @@ import { createSelectors } from '@/lib/utils'
 import { defaultQueryLabel } from '@/lib/constants'
 import { Message, QueryRequest } from '@/api/lightrag'
 
+// Quiz settings types
+export interface QuizSettings {
+  selectedDocumentIds: string[]
+  difficulty: 'easy' | 'medium' | 'hard'
+  numQuestions: 10 | 25 | 50
+  runVerification: boolean
+}
+
 type Theme = 'dark' | 'light' | 'system'
 type Language = 'en' | 'zh' | 'fr' | 'ar' | 'zh_TW' | 'ru' | 'ja' | 'de' | 'uk' | 'ko' | 'vi'
-type Tab = 'documents' | 'knowledge-graph' | 'retrieval' | 'api'
+type Tab = 'documents' | 'knowledge-graph' | 'retrieval' | 'quiz' | 'api'
 
 interface SettingsState {
   // Document manager settings
@@ -61,6 +69,10 @@ interface SettingsState {
 
   querySettings: Omit<QueryRequest, 'query'>
   updateQuerySettings: (settings: Partial<QueryRequest>) => void
+
+  // Quiz settings
+  quizSettings: QuizSettings
+  updateQuizSettings: (partial: Partial<QuizSettings>) => void
 
   // Auth settings
   apiKey: string | null
@@ -120,6 +132,13 @@ const useSettingsStoreBase = create<SettingsState>()(
 
       retrievalHistory: [],
       userPromptHistory: [],
+
+      quizSettings: {
+        selectedDocumentIds: [],
+        difficulty: 'medium',
+        numQuestions: 10,
+        runVerification: true,
+      },
 
       querySettings: {
         mode: 'global',
@@ -197,6 +216,11 @@ const useSettingsStoreBase = create<SettingsState>()(
         }))
       },
 
+      updateQuizSettings: (partial: Partial<QuizSettings>) =>
+        set((state) => ({
+          quizSettings: { ...state.quizSettings, ...partial }
+        })),
+
       setShowFileName: (show: boolean) => set({ showFileName: show }),
       setShowLegend: (show: boolean) => set({ showLegend: show }),
       setDocumentsPageSize: (size: number) => set({ documentsPageSize: size }),
@@ -238,7 +262,7 @@ const useSettingsStoreBase = create<SettingsState>()(
     {
       name: 'settings-storage',
       storage: createJSONStorage(() => localStorage),
-      version: 19,
+      version: 20,
       migrate: (state: any, version: number) => {
         if (version < 2) {
           state.showEdgeLabel = false
@@ -339,6 +363,15 @@ const useSettingsStoreBase = create<SettingsState>()(
           // Remove deprecated response_type parameter
           if (state.querySettings) {
             delete state.querySettings.response_type
+          }
+        }
+        if (version < 20) {
+          // Add quizSettings for older versions
+          state.quizSettings = {
+            selectedDocumentIds: [],
+            difficulty: 'medium',
+            numQuestions: 10,
+            runVerification: true,
           }
         }
         return state

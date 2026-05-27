@@ -10,6 +10,7 @@
     "documents": "문서",
     "knowledgeGraph": "지식 그래프",
     "retrieval": "검색",
+    "quiz": "Quiz",
     "api": "API",
     "projectRepository": "프로젝트 저장소",
     "logout": "로그아웃",
@@ -460,6 +461,51 @@
       "userPromptPlaceholder": "사용자 지정 프롬프트 입력 (선택 사항)",
       "enableRerank": "Rerank 활성화",
       "enableRerankTooltip": "검색된 텍스트 청크에 대해 Rerank를 활성화합니다. True이지만 Rerank 모델이 구성되지 않은 경우 경고가 발생합니다. 기본값은 True입니다."
+    }
+  },
+  "quizPanel": {
+    "settings": {
+      "title": "Quiz Settings",
+      "description": "Configure quiz generation parameters",
+      "modeLabel": "Retrieval Mode",
+      "modeTooltip": "Select the retrieval strategy for quiz generation. Mix (graph) and Naive (chunks) use thesis-rigorous difficulty mechanics. Other modes use top_k scaling as a coarse proxy.",
+      "modeWarning": "Rigorous difficulty mechanics apply only in Mix and Naive modes. This mode uses top_k scaling as a coarse proxy and should not be used for thesis-grade comparison.",
+      "difficultyTitle": "Difficulty",
+      "difficultyTooltip": "Controls both retrieval depth (structural) and reasoning type (cognitive). Two-dimensional difficulty: both must be satisfied.",
+      "difficultyEasy": "Easy (1-hop / 1-chunk, factual)",
+      "difficultyMedium": "Medium (2-hop / 2-chunk, comparative)",
+      "difficultyHard": "Hard (3-hop / 3-chunk, causal+)",
+      "numQuestionsTitle": "Number of Questions",
+      "numQuestionsTooltip": "How many questions to generate in this batch.",
+      "runVerification": "Run Verification (Claude Sonnet)",
+      "runVerificationTooltip": "After generation, run each question through Claude Sonnet to verify claimed difficulty metadata and answerability."
+    },
+    "documentSelector": {
+      "title": "Documents",
+      "selectAll": "Select all",
+      "selectedCount": "{{count}} selected"
+    },
+    "results": {
+      "empty": "Select documents and click Generate Quiz to start.",
+      "generating": "Generating questions…",
+      "verifying": "Verifying…",
+      "downloadJson": "Download JSON",
+      "copyQuestions": "Copy questions",
+      "reverify": "Re-verify"
+    },
+    "form": {
+      "generate": "Generate Quiz"
+    },
+    "history": {
+      "title": "Quiz History",
+      "refresh": "Refresh history",
+      "empty": "No quizzes generated yet."
+    },
+    "errors": {
+      "noDocuments": "Please select at least one document before generating a quiz.",
+      "generateFailed": "Failed to generate quiz. Please try again.",
+      "reverifyFailed": "Failed to re-verify quiz. Please try again.",
+      "loadFailed": "Failed to load quiz. Please try again."
     }
   },
   "apiSite": {
