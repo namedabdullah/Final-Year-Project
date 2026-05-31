@@ -223,6 +223,35 @@ def test_seed_selection_authoritative_defaults_false():
     assert SeedSelection(seeds=[], strategy="x").authoritative is False
 
 
+def test_naive_floor_rejects_embedded_artifact_anchor():
+    hexid = "0" * 32
+    chunks = [
+        # Thin heading + embedded table markup → artifact-dominated → excluded,
+        # even though it does NOT start with [Image]/[Table].
+        {"id": "embedded", "full_doc_id": "D1",
+         "content": f'# Example 3\n10\n<table id="tb-{hexid}-0001">P1 P2 burst times</table>'},
+        # Real prose ahead of an embedded table → kept (high precision).
+        {"id": "prose_with_table", "full_doc_id": "D1",
+         "content": ("# Memory Hierarchy 12 The memory hierarchy orders storage devices by "
+                     f'access speed cost and capacity as summarised <table id="tb-{hexid}-0002">x</table>')},
+    ]
+    rows = scoring.score_naive(chunks, _fs)
+    by_key = {r["key"]: r for r in rows}
+    assert by_key["embedded"]["is_anchor"] is True
+    assert by_key["embedded"]["meets_floor"] is False
+    assert by_key["prose_with_table"]["is_anchor"] is False
+    assert by_key["prose_with_table"]["meets_floor"] is True
+
+
+def test_is_embedded_anchor_helper():
+    hexid = "a" * 32
+    assert scoring._is_embedded_anchor(f'# Linux bcc/BPF Tracing Tools\n19\n<drawing id="im-{hexid}-0002">') is True
+    assert scoring._is_embedded_anchor("Paging eliminates external fragmentation by mapping pages.") is False  # no artifact
+    # Substantial lead prose before the artifact → not artifact-dominated.
+    long_lead = "The translation lookaside buffer caches recent page table entries to speed address translation as the diagram below illustrates "
+    assert scoring._is_embedded_anchor(long_lead + f'<drawing id="im-{hexid}-0003">') is False
+
+
 def test_naive_floor_rejects_anchor_and_title_slides():
     chunks = [
         # Bare table anchor → excluded by default (QUIZ_NAIVE_EXCLUDE_ANCHORS).

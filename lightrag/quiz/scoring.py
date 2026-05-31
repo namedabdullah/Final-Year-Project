@@ -63,6 +63,11 @@ _NAIVE_EXCLUDE_ANCHORS = (
 # Phase 4 (quality-plan.md §14); the Step-2 LLM layer is the real filter for
 # low-value-but-long chunks.
 _MIN_CHUNK_TOKENS = int(os.environ.get("QUIZ_MIN_CHUNK_TOKENS", "5"))
+# Max prose tokens that may precede an embedded artifact tag before the chunk is
+# still treated as artifact-dominated (an "embedded anchor"). A chunk with more
+# real prose than this ahead of the table/drawing is kept. Keeps the embedded-
+# anchor rule HIGH-PRECISION (minimises over-pruning of prose-with-a-figure).
+_MAX_PROSE_BEFORE_ARTIFACT = int(os.environ.get("QUIZ_MAX_PROSE_BEFORE_ARTIFACT", "8"))
 # Cosine similarity at/above which two seed candidates are treated as the same
 # topic cluster (quality-plan.md §7.1). Calibrated in Phase 4.
 _DIVERSITY_SIM_THRESHOLD = float(
@@ -98,6 +103,15 @@ _CONNECTIVES = (
 # and make poor *seeds* (bare captions) even though they remain valid retrieval
 # targets — see quality-plan.md §5.3 (down-rank as seed, not filter retrieval).
 _ANCHOR_RE = re.compile(r"^\s*\[\s*(image|table|figure)\b", re.IGNORECASE)
+# Embedded multimodal-artifact markup, e.g. `<table id="tb-<32hex>-0001">` or
+# `<drawing id="im-<32hex>-0002">`. Catches chunks that open with a thin heading
+# then embed the artifact as their real payload (which _ANCHOR_RE, leading-only,
+# misses). `[^>]*?` stays inside the opening tag and is robust to attribute
+# order/quoting.
+_EMBEDDED_ARTIFACT_RE = re.compile(
+    r"<\s*(?:table|drawing|image|figure)\b[^>]*?(?:tb|im|mm)-[0-9a-f]{32}",
+    re.IGNORECASE,
+)
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z\-]+")
 _ACRONYM_RE = re.compile(r"\b[A-Z]{2,}\b")
 _TITLECASE_PHRASE_RE = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b")
@@ -365,6 +379,23 @@ async def score_mix(
 # ---------------------------------------------------------------------------
 
 
+def _is_embedded_anchor(content: str) -> bool:
+    """True if a chunk's body is dominated by an embedded multimodal artifact.
+
+    Catches chunks that open with a thin heading/number then embed the artifact
+    markup as their real payload — e.g. ``# Example 3 <table id="tb-…">`` or
+    ``# Linux bcc/BPF Tracing Tools <drawing id="im-…">`` — which ``_ANCHOR_RE``
+    (leading ``[Image]``/``[Table]`` only) misses. High-precision: a chunk with
+    substantial prose (``>= _MAX_PROSE_BEFORE_ARTIFACT`` content tokens) ahead of
+    the artifact is kept, so genuine prose-with-a-figure is not over-pruned.
+    """
+    m = _EMBEDDED_ARTIFACT_RE.search(content or "")
+    if not m:
+        return False
+    prose_before = len(_TOKEN_RE.findall(content[: m.start()]))
+    return prose_before < _MAX_PROSE_BEFORE_ARTIFACT
+
+
 def score_naive(
     chunks: List[dict],
     first_sentence: Callable[[str], str],
@@ -381,7 +412,7 @@ def score_naive(
         cid = c.get("id", c.get("chunk_id", "")) or ""
         doc_id = c.get("full_doc_id", "") or ""
 
-        is_anchor = bool(_ANCHOR_RE.match(content))
+        is_anchor = bool(_ANCHOR_RE.match(content)) or _is_embedded_anchor(content)
         tokens = _TOKEN_RE.findall(content)
         n_tokens = len(tokens)
         ntok = max(1, n_tokens)
