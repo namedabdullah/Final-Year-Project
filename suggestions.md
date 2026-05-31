@@ -240,13 +240,25 @@ and wired into the pedagogical sampler:
 - Config: `QUIZ_SEED_LLM_RERANK` (default true), `QUIZ_SEED_LLM_TOPN`,
   `QUIZ_SEED_LLM_MODEL`.
 
+**Step-2 R3 smoke finding + follow-up (applied):** the LLM judged accurately
+(weak seeds → llm ranks 60–79; foundational → 1–13) but **re-rank-only with
+equal weights did not evict them** — they were out-voted 3-to-1 by deg/xdoc/freq
+and still made the top-10. Fixed by: (a) **up-weighting** the `llm` signal
+(`QUIZ_LLM_WEIGHT`, default 2.0) and (b) a **soft bottom gate** that excludes
+candidates the LLM *actually scored* ≤ `QUIZ_LLM_GATE_SCORE` (default 2.0; set 0
+for pure re-rank). The gate is safe here because the smoke scores are bimodal.
+Config: `QUIZ_LLM_RERANK`, `QUIZ_LLM_TOPN`, `QUIZ_SEED_LLM_MODEL`,
+`QUIZ_LLM_WEIGHT`, `QUIZ_LLM_GATE_SCORE`.
+
 **Residual for Step 2 (P1/P2):**
-- **Not yet validated live** — the re-rank's *effect* (do `process_burst_start_times`,
-  the `CSC 323` title slide, `Windows`, `Running`, `Process P2` actually sink?)
-  needs a live smoke run. **P1**
-- **Soft/hard gate deferred** — only the re-rank role is built; the optional
-  bottom gate (exclude very-low-scored) was not requested. Revisit if re-rank
-  alone leaves weak seeds. **P2**
+- **Up-weight + gate not yet validated live** — confirm the weak seeds are now
+  gone (and that the gate doesn't over-prune) in one more smoke run. **P1**
+- **Gate reason not distinguished** — an LLM-gated file reports
+  `below_threshold` (same as the deterministic floor). Accurate but conflated;
+  a distinct `llm_gated` reason would need a schema enum addition. **P2**
+- **No live test of the API call** — `_parse_scores`/`_cache_key`/`_build_prompt`,
+  `apply_llm_rerank` (incl. weight + gate) are unit-tested; the network call is
+  exercised only by the live smoke run (no DB/API mocking). **P2**
 - **No live test of the API call** — `_parse_scores`/`_cache_key`/`_build_prompt`
   and `apply_llm_rerank` are unit-tested; the network call is exercised only by
   the live smoke run (no DB/API mocking). **P2**

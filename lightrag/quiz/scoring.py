@@ -73,6 +73,15 @@ _MAX_PROSE_BEFORE_ARTIFACT = int(os.environ.get("QUIZ_MAX_PROSE_BEFORE_ARTIFACT"
 _DIVERSITY_SIM_THRESHOLD = float(
     os.environ.get("QUIZ_DIVERSITY_SIM_THRESHOLD", "0.6")
 )
+# Step-2 LLM re-rank tuning. `_LLM_WEIGHT` (>1) lets the LLM importance signal
+# count for more than a single structural signal in the RRF fusion, so the
+# LLM's verdict isn't out-voted 3-to-1 by deg/xdoc/freq. `_LLM_GATE_SCORE` is a
+# soft bottom gate: candidates the LLM *actually scored* at or below this 1-10
+# value fail the floor (excluded as seeds); set to 0 to disable the gate and
+# keep pure re-rank. Both calibrated in Phase 4 (the smoke run showed LLM scores
+# are cleanly bimodal — good 8-10, junk 1-2 — so a strict gate is safe).
+_LLM_WEIGHT = float(os.environ.get("QUIZ_LLM_WEIGHT", "2.0"))
+_LLM_GATE_SCORE = float(os.environ.get("QUIZ_LLM_GATE_SCORE", "2.0"))
 
 # Signal sets per arm (also the RRF fusion keys).
 MIX_SIGNALS = ("deg", "xdoc", "freq")
@@ -158,25 +167,47 @@ def apply_llm_rerank(
     rows: List[dict],
     base_signals: Sequence[str],
     llm_scores: Dict[str, float],
+    *,
+    weight: float = _LLM_WEIGHT,
+    gate_score: float = _LLM_GATE_SCORE,
 ) -> None:
-    """Fold an LLM educational-importance score in as an extra RRF signal (Step 2).
+    """Fold an LLM educational-importance score in as an RRF signal (Step 2).
 
-    Re-rank ONLY: adds an ``llm`` signal and re-fuses RRF over
-    ``base_signals + ['llm']`` in place. Nothing is dropped. Candidates the LLM
-    did not score receive the *mean* of the provided scores (a neutral rank), so
-    an un-judged candidate is neither boosted nor penalised. No-op when
-    ``llm_scores`` is empty (e.g. no API key), leaving the deterministic ranking
-    untouched. The mix anti-hub penalty is re-applied after the re-fuse.
+    Adds an ``llm`` signal and re-fuses RRF over ``base_signals + ['llm']`` in
+    place, with the ``llm`` term **up-weighted by ``weight``** so the LLM verdict
+    isn't out-voted by the structural signals. Candidates the LLM did not score
+    receive the *mean* of the provided scores (a neutral rank), so an un-judged
+    candidate is neither boosted nor penalised.
+
+    **Soft bottom gate**: candidates the LLM *actually scored* at or below
+    ``gate_score`` (1-10) have ``meets_floor`` cleared → excluded as seeds by
+    ``allocate``. Un-scored candidates are never gated (we don't know their
+    importance). Set ``gate_score <= 0`` for pure re-rank (no exclusion).
+
+    No-op when ``llm_scores`` is empty (e.g. no API key), leaving the
+    deterministic ranking untouched. The mix anti-hub penalty is re-applied
+    after the re-fuse.
     """
     if not rows or not llm_scores:
         return
     neutral = sum(llm_scores.values()) / len(llm_scores)
     for r in rows:
         r["signals"]["llm"] = float(llm_scores.get(r.get("key", ""), neutral))
-    fuse_rrf(rows, list(base_signals) + ["llm"])
+
+    weights = {s: 1.0 for s in base_signals}
+    weights["llm"] = weight
+    fuse_rrf(rows, list(base_signals) + ["llm"], weights=weights)
+
     for r in rows:
         if r.get("is_hub"):
             r["rrf_score"] *= _HUB_PENALTY
+
+    # Soft bottom gate — only on candidates the LLM genuinely judged low.
+    if gate_score and gate_score > 0:
+        for r in rows:
+            key = r.get("key", "")
+            if key in llm_scores and llm_scores[key] <= gate_score:
+                r["meets_floor"] = False
 
 
 def allocate(

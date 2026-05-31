@@ -320,6 +320,45 @@ def test_llm_importance_cache_key_and_prompt():
     assert "1. Memory" in p and "2. Scheduling" in p
 
 
+def test_apply_llm_rerank_weight_increases_llm_influence():
+    def fresh():
+        return [{"key": "a", "signals": {"x": 10.0}}, {"key": "b", "signals": {"x": 1.0}}]
+
+    # a leads on x; b is the LLM-favoured one. Higher llm weight should widen b's
+    # standing relative to a.
+    r1 = fresh()
+    scoring.fuse_rrf(r1, ["x"])
+    scoring.apply_llm_rerank(r1, ["x"], {"a": 1.0, "b": 10.0}, weight=1.0, gate_score=0)
+    r2 = fresh()
+    scoring.fuse_rrf(r2, ["x"])
+    scoring.apply_llm_rerank(r2, ["x"], {"a": 1.0, "b": 10.0}, weight=5.0, gate_score=0)
+    g1 = {r["key"]: r["rrf_score"] for r in r1}
+    g2 = {r["key"]: r["rrf_score"] for r in r2}
+    assert (g2["b"] - g2["a"]) > (g1["b"] - g1["a"])
+
+
+def test_apply_llm_rerank_soft_gate_excludes_low_scores():
+    rows = [
+        {"key": "good", "signals": {"x": 5.0}, "meets_floor": True},
+        {"key": "junk", "signals": {"x": 5.0}, "meets_floor": True},
+        {"key": "unscored", "signals": {"x": 5.0}, "meets_floor": True},
+    ]
+    scoring.fuse_rrf(rows, ["x"])
+    # good=9 (keep), junk=1 (gate at <=2), unscored not judged (never gated)
+    scoring.apply_llm_rerank(rows, ["x"], {"good": 9.0, "junk": 1.0}, gate_score=2.0)
+    by = {r["key"]: r for r in rows}
+    assert by["junk"]["meets_floor"] is False
+    assert by["good"]["meets_floor"] is True
+    assert by["unscored"]["meets_floor"] is True
+
+
+def test_apply_llm_rerank_gate_disabled_keeps_low_scores():
+    rows = [{"key": "junk", "signals": {"x": 5.0}, "meets_floor": True}]
+    scoring.fuse_rrf(rows, ["x"])
+    scoring.apply_llm_rerank(rows, ["x"], {"junk": 1.0}, gate_score=0)
+    assert rows[0]["meets_floor"] is True  # gate off → not excluded
+
+
 def test_naive_floor_rejects_anchor_and_title_slides():
     chunks = [
         # Bare table anchor → excluded by default (QUIZ_NAIVE_EXCLUDE_ANCHORS).
