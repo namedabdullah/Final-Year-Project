@@ -235,12 +235,24 @@ async def generate_quiz(rag: "LightRAG", req: QuizGenerateRequest) -> QuizGenera
         seed_scores = [None] * len(seeds)
 
     if not seeds:
-        warnings.append(
-            "No seeds could be sampled from the selected documents. "
-            "Using generic placeholders — question quality may be low."
-        )
-        seeds = [f"topic_{i+1}" for i in range(req.num_questions)]
-        seed_scores = [None] * len(seeds)
+        if selection.authoritative:
+            # The pedagogical scorer ran but nothing cleared the meaningfulness
+            # floor (typically a figure/table-anchor-dominated file set). Honour
+            # the empty quiz — do NOT fabricate topic_N placeholders or revert to
+            # random seeds, which would mask the finding (quality-plan.md §6.1).
+            warnings.append(
+                "Seed selection found no candidates that clear the meaningfulness "
+                "floor for the selected documents — returning an empty quiz "
+                "(no placeholder padding). The chosen files are likely dominated "
+                "by figure/table anchors with little teachable prose."
+            )
+        else:
+            warnings.append(
+                "No seeds could be sampled from the selected documents. "
+                "Using generic placeholders — question quality may be low."
+            )
+            seeds = [f"topic_{i+1}" for i in range(req.num_questions)]
+            seed_scores = [None] * len(seeds)
 
     # Transparency: surface files that contributed nothing (quality-plan.md §6.2).
     for fc in selection.file_contributions:
@@ -290,7 +302,7 @@ async def generate_quiz(rag: "LightRAG", req: QuizGenerateRequest) -> QuizGenera
     results = await asyncio.gather(*tasks)
     questions = [q for q in results if q is not None]
 
-    if not questions:
+    if seeds and not questions:
         warnings.append("All question generations failed — returning empty quiz.")
 
     # Quiz-level diversity metric (quality-plan.md §8.1). Best-effort: embed the

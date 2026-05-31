@@ -175,6 +175,49 @@ Also operational:
 
 ---
 
+## G. Step 1 implemented + adversarially reviewed (2026-05) — fixes applied & residuals
+
+Step 1 (deterministic seed filters) shipped and was reviewed by two adversarial
+agents. **Applied fixes** from the review:
+
+- **S-state false-positive (HIGH)** — the `\b[TS]_?\d\b` redaction pattern ate
+  ACPI sleep states (S0–S5; S3 = suspend-to-RAM). Tightened to `\b[TS]_\d\b`
+  (underscore-required); bare `S3`/`T1` now survive.
+- **P-state false-positive (HIGH)** — entity-dropping is now **decoupled** from
+  redaction: `is_instance_label_entity` uses a high-precision pattern subset
+  (`_ENTITY_INSTANCE_PATTERNS`) that excludes bare `P0`–`P4`/`S0`–`S5`, so
+  ACPI P-/S-state *concepts* are never dropped from the mix pool. Redaction
+  stays aggressive (bare `P1` still redacted — burst-time tables need it).
+- **Silent random fallback (HIGH)** — added `SeedSelection.authoritative`. When
+  the naive floor legitimately empties the pool, the result is honoured (empty/
+  smaller quiz with a clear warning) instead of silently reverting to the
+  floor-less random baseline. `pipeline.py` no longer placeholder-pads an
+  authoritative-empty result.
+- **Token floor over-prune (MED)** — `QUIZ_MIN_CHUNK_TOKENS` default lowered
+  10 → 5 (token count can't separate terse-teachable bullets from filler;
+  Phase-4 calibration still pending).
+
+**Residual / accepted limitations (documented, not fixed):**
+
+- **P-state-in-prose redaction** — bare `P0`/`P1` in *retrieved prose* is still
+  redacted to `{process}` (kept for burst-time tables). So genuine "P0 power
+  state" text in a passage is over-redacted. Accepted: rare vs. the burst-table
+  need; note in the methodology appendix.
+- **Bare `P1`/`P2`/`S3` entities are kept** — they may be weak instance-y seeds
+  ("Process P2"). This is the deliberate safe-error direction (keep-not-drop);
+  the **Step-2 LLM layer** is the intended demoter.
+- **`is_instance_label_entity` reshapes the random mix baseline too** (shared
+  listers). Intended and consistent with the existing artifact/figure filters —
+  note in methodology that the ablation control shares these filters.
+- **`MIN_CHUNK_TOKENS` calibration** still deferred to Phase 4 (corpus
+  histogram). **P1**
+- **Integration test for the all-floor-fail naive case** — can't be unit-tested
+  without a real in-memory LightRAG fixture (no DB mocking). The allocate-level
+  and dataclass behaviour are locked by pure tests; the end-to-end "no anchor
+  seeds re-emitted" path needs the fixture (gap E). **P2**
+
+---
+
 ## Recommended next steps (in order)
 
 1. **(P1)** Live smoke run, both arms — confirm the new scorer works on the real

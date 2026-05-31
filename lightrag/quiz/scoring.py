@@ -46,9 +46,23 @@ _HUB_PENALTY = float(os.environ.get("QUIZ_HUB_PENALTY", "0.5"))
 _HUB_HARD_EXCLUDE = os.environ.get("QUIZ_HUB_HARD_EXCLUDE", "false").lower() == "true"
 _MIN_ENTITY_DEGREE = int(os.environ.get("QUIZ_MIN_ENTITY_DEGREE", "0"))
 _MIN_CHUNK_DENSITY = float(os.environ.get("QUIZ_MIN_CHUNK_DENSITY", "0.0"))
+# Step 1 (suggestions.md A1): exclude bare figure/table anchor chunks from the
+# naive *seed* pool by default. This is seed selection, NOT retrieval filtering
+# — naive retrieval still spans the full (table-inclusive) chunk space, so the
+# arm stays methodologically "naive". May shrink a naive quiz below N when the
+# corpus is anchor-dominated; that smaller quiz is honoured (no padding) and is
+# itself a reportable finding.
 _NAIVE_EXCLUDE_ANCHORS = (
-    os.environ.get("QUIZ_NAIVE_EXCLUDE_ANCHORS", "false").lower() == "true"
+    os.environ.get("QUIZ_NAIVE_EXCLUDE_ANCHORS", "true").lower() == "true"
 )
+# Minimum content-token count (alphabetic 2+ char tokens) for a chunk to be a
+# seed — rejects the shortest title/divider stubs ("CSC 323 … Instructor:").
+# Kept deliberately LOW: token count cannot reliably separate terse-but-teachable
+# slide bullets ("TLB caches page table entries.") from filler, so a high floor
+# would over-prune. Calibrate against the corpus chunk-token histogram in
+# Phase 4 (quality-plan.md §14); the Step-2 LLM layer is the real filter for
+# low-value-but-long chunks.
+_MIN_CHUNK_TOKENS = int(os.environ.get("QUIZ_MIN_CHUNK_TOKENS", "5"))
 # Cosine similarity at/above which two seed candidates are treated as the same
 # topic cluster (quality-plan.md §7.1). Calibrated in Phase 4.
 _DIVERSITY_SIM_THRESHOLD = float(
@@ -369,7 +383,8 @@ def score_naive(
 
         is_anchor = bool(_ANCHOR_RE.match(content))
         tokens = _TOKEN_RE.findall(content)
-        ntok = max(1, len(tokens))
+        n_tokens = len(tokens)
+        ntok = max(1, n_tokens)
         density = (len(_ACRONYM_RE.findall(content)) + len(_TITLECASE_PHRASE_RE.findall(content))) / ntok
         lc = content.lower()
         explan = float(sum(1 for p in _CONNECTIVES if p in lc))
@@ -382,6 +397,7 @@ def score_naive(
                 "dedup_key": cid,
                 "is_anchor": is_anchor,
                 "density": density,
+                "n_tokens": n_tokens,
                 "signals": {
                     "prose": 0.0 if is_anchor else 1.0,
                     "density": density,
@@ -395,9 +411,16 @@ def score_naive(
 
     fuse_rrf(rows, NAIVE_SIGNALS)
 
+    # Floor (Step 1): a seed chunk must be prose (not a bare anchor, unless
+    # exclusion is disabled) and carry enough content tokens to be teachable
+    # (rejects the shortest title/divider stubs). The density clause is OFF by
+    # default (_MIN_CHUNK_DENSITY=0.0 ⇒ always passes); it only gates when a
+    # non-zero QUIZ_MIN_CHUNK_DENSITY is set during Phase-4 calibration.
     for r in rows:
-        r["meets_floor"] = (r["density"] >= _MIN_CHUNK_DENSITY) and not (
-            r["is_anchor"] and _NAIVE_EXCLUDE_ANCHORS
+        r["meets_floor"] = (
+            (not (r["is_anchor"] and _NAIVE_EXCLUDE_ANCHORS))
+            and (r["n_tokens"] >= _MIN_CHUNK_TOKENS)
+            and (r["density"] >= _MIN_CHUNK_DENSITY)
         )
 
     return rows

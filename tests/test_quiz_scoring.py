@@ -167,6 +167,82 @@ def test_score_naive_carries_first_sentence_seed():
 
 
 # ---------------------------------------------------------------------------
+# Step 1 — deterministic floors (suggestions.md A1/A2)
+# ---------------------------------------------------------------------------
+
+
+def test_is_instance_label_entity():
+    from lightrag.quiz.artifacts import is_instance_label_entity
+
+    # Clearly-instance, delimited labels → dropped from the seed pool.
+    assert is_instance_label_entity("Core 1") is True
+    assert is_instance_label_entity("Thread 3") is True
+    assert is_instance_label_entity("process 2") is True
+    assert is_instance_label_entity("CPU_7") is True
+    assert is_instance_label_entity("Semaphore A") is True
+    assert is_instance_label_entity("P_0") is True
+    assert is_instance_label_entity("S_3") is True
+    # Ambiguous bare tokens that double as real OS concepts → KEPT (high
+    # precision: never silently delete a legitimate concept).
+    assert is_instance_label_entity("S3") is False      # ACPI sleep state
+    assert is_instance_label_entity("P0") is False      # ACPI P-state
+    assert is_instance_label_entity("Process P2") is False  # weak but kept; LLM layer demotes
+    # Real concepts — kept.
+    assert is_instance_label_entity("Operating System") is False
+    assert is_instance_label_entity("Thread Pool") is False
+    assert is_instance_label_entity("Page Table") is False
+    assert is_instance_label_entity("Bounded-Buffer Problem") is False
+    assert is_instance_label_entity("") is False
+
+
+def test_redaction_preserves_acpi_states_but_keeps_process_labels():
+    from lightrag.quiz.artifacts import redact_instance_labels
+
+    # Bare S-/T-states must survive redaction (no longer eaten by [TS]_?\d).
+    assert redact_instance_labels("S3") == "S3"
+    assert redact_instance_labels("S3 sleep state") == "S3 sleep state"
+    # Underscore instance shorthand still redacts.
+    assert redact_instance_labels("T_1") == "{thread}"
+    # Bare process labels still redact (burst-time tables rely on this).
+    assert redact_instance_labels("P1 has arrival time 0").startswith("{process}")
+
+
+def test_allocate_all_floor_fail_returns_empty():
+    # When every candidate fails the floor, allocate selects nothing and every
+    # file is reported below_threshold (this is what makes the pedagogical
+    # result authoritative-empty rather than a failure → no random fallback).
+    rows = [_row("a", "A", 0.9, floor=False), _row("b", "B", 0.8, floor=False)]
+    selected, contribs = scoring.allocate(rows, 5, ["A", "B"])
+    assert selected == []
+    assert all(c["seed_count"] == 0 and c["reason"] == "below_threshold" for c in contribs)
+
+
+def test_seed_selection_authoritative_defaults_false():
+    from lightrag.quiz.seeds import SeedSelection
+
+    assert SeedSelection(seeds=[], strategy="x").authoritative is False
+
+
+def test_naive_floor_rejects_anchor_and_title_slides():
+    chunks = [
+        # Bare table anchor → excluded by default (QUIZ_NAIVE_EXCLUDE_ANCHORS).
+        {"id": "anchor", "full_doc_id": "D1",
+         "content": "[Table Name]process_burst_time_schedule shows arrival and burst columns."},
+        # Title/divider slide → too few content tokens.
+        {"id": "title", "full_doc_id": "D1", "content": "CSC 323 Operating Systems Instructor"},
+        # Real teachable prose → passes the floor.
+        {"id": "prose", "full_doc_id": "D1",
+         "content": "Virtual memory is an abstraction that decouples logical address "
+                    "spaces from the physical memory installed on the machine."},
+    ]
+    rows = scoring.score_naive(chunks, _fs)
+    floor = {r["key"]: r["meets_floor"] for r in rows}
+    assert floor["anchor"] is False
+    assert floor["title"] is False
+    assert floor["prose"] is True
+
+
+# ---------------------------------------------------------------------------
 # Deterministic RNG (reproducibility — quality-plan.md §7.4)
 # ---------------------------------------------------------------------------
 

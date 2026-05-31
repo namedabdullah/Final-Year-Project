@@ -59,8 +59,11 @@ _INSTANCE_LABEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bFrame[\s_]\d+\b"), "{memory_frame}"),
     # Named semaphores: "Semaphore X", "Semaphore_Y"
     (re.compile(r"\bSemaphore[\s_][A-Z]\b"), "{semaphore}"),
-    # Last-resort short instance tokens: "T1", "T_0", "S2", "S_3"
-    (re.compile(r"\b[TS]_?\d\b"), "{thread}"),
+    # Last-resort short instance tokens — underscore form ONLY ("T_0", "S_3").
+    # The bare form ("S3", "T1") was removed: it collided with ACPI sleep
+    # states S0-S5 (S3 = suspend-to-RAM) and other single-letter+digit OS
+    # concepts, corrupting them to "{thread}".
+    (re.compile(r"\b[TS]_\d\b"), "{thread}"),
 ]
 
 
@@ -82,6 +85,62 @@ def redact_instance_labels(text: str) -> str:
     for pat, repl in _INSTANCE_LABEL_PATTERNS:
         text = pat.sub(repl, text)
     return text
+
+
+# High-confidence instance-label patterns for ENTITY dropping. Deliberately a
+# *subset* of the redaction patterns above — and intentionally allowed to drift
+# from them. Redaction (in retrieved prose) is high-recall: over-redacting a
+# stray label costs little. Entity dropping is the opposite: a dropped entity
+# leaves the quiz pool entirely, so it must be high-precision. We therefore
+# exclude the bare letter+digit forms that collide with real OS concepts —
+# bare "P0"-"P4" (ACPI P-states / DVFS), "S0"-"S5" (sleep states), "C0"/"C6"
+# (C-states) — and keep only the clearly-instance, delimited forms.
+_ENTITY_INSTANCE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\bThread[\s_][A-Z0-9]\b"),
+    re.compile(r"\bprocess[\s_]\d+\b", re.IGNORECASE),
+    re.compile(r"\bP_\d+\b"),  # "P_0" only — bare "P0" is kept (P-state)
+    re.compile(r"\bcore[\s_]\d+\b", re.IGNORECASE),
+    re.compile(r"\bCPU[\s_]\d+\b"),
+    re.compile(r"\bPage[\s_]\d+\b"),
+    re.compile(r"\bFrame[\s_]\d+\b"),
+    re.compile(r"\bSemaphore[\s_][A-Z]\b"),
+    re.compile(r"\b[TS]_\d\b"),  # "T_0"/"S_3" only — bare "S3"/"T1" kept (S-state)
+]
+
+
+def is_instance_label_entity(name: str) -> bool:
+    """True if an entity *name* is a diagram instance label, not a concept.
+
+    Instance labels — ``Core 1``, ``Thread 3``, ``process 2``, ``P_0`` — are
+    extracted as KG nodes but make poor quiz *seeds*: the quiz would interrogate
+    a specific labelled instance rather than the underlying concept. Used to
+    drop such entities from the mix-arm candidate pool (quality-plan.md Step 1 /
+    suggestions.md A2).
+
+    High-precision by design: ambiguous bare tokens that double as real OS
+    concepts are KEPT (``S3`` sleep state, ``P0``-``P4`` performance states).
+    The cost is that a genuinely-instance bare token like ``Process P2`` is also
+    kept — a weak-but-not-wrong seed that the Step-2 LLM layer can demote — which
+    is the safer error than silently deleting a legitimate concept.
+
+    Examples
+    --------
+    >>> is_instance_label_entity("Core 1")
+    True
+    >>> is_instance_label_entity("Thread 3")
+    True
+    >>> is_instance_label_entity("P_0")
+    True
+    >>> is_instance_label_entity("S3")        # ACPI sleep state — kept
+    False
+    >>> is_instance_label_entity("P0")        # ACPI P-state — kept
+    False
+    >>> is_instance_label_entity("Operating System")
+    False
+    """
+    if not name:
+        return False
+    return any(p.search(name) for p in _ENTITY_INSTANCE_PATTERNS)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +217,7 @@ def is_figure_label_entity(name: str) -> bool:
 __all__ = [
     "is_artifact_id",
     "redact_instance_labels",
+    "is_instance_label_entity",
     "normalize_concept_name",
     "is_figure_label_entity",
 ]

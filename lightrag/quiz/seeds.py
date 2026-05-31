@@ -29,7 +29,11 @@ from typing import TYPE_CHECKING, Dict, List, Set
 
 from lightrag.constants import GRAPH_FIELD_SEP
 from lightrag.quiz import scoring
-from lightrag.quiz.artifacts import is_artifact_id, is_figure_label_entity
+from lightrag.quiz.artifacts import (
+    is_artifact_id,
+    is_figure_label_entity,
+    is_instance_label_entity,
+)
 from lightrag.utils import compute_mdhash_id
 
 if TYPE_CHECKING:
@@ -50,12 +54,20 @@ class SeedSelection:
     ``seeds`` and ``seed_scores`` are parallel lists; ``seed_scores`` is empty
     for the random baseline. ``file_contributions`` is a list of
     ``{doc_id, seed_count, reason}`` dicts (empty for the random baseline).
+
+    ``authoritative`` distinguishes a *legitimately small/empty* pedagogical
+    result (candidates existed but the meaningfulness floor emptied the pool)
+    from a *true failure* (no candidates at all, or the scorer raised). Only the
+    latter may fall back to the random baseline; an authoritative empty result
+    must be honoured, so the floor cannot be silently bypassed by re-emitting
+    the very anchors it excluded.
     """
 
     seeds: List[str]
     strategy: str
     file_contributions: List[dict] = field(default_factory=list)
     seed_scores: List[dict] = field(default_factory=list)
+    authoritative: bool = False
 
 
 def _make_rng(scope_doc_ids: set, mode: str) -> random.Random:
@@ -166,7 +178,10 @@ async def _list_entities_in_scope(
     # we don't burn the round-trip on nodes we'd discard anyway.
     names = [
         n for n in names
-        if n and not is_artifact_id(n) and not is_figure_label_entity(n)
+        if n
+        and not is_artifact_id(n)
+        and not is_figure_label_entity(n)
+        and not is_instance_label_entity(n)
     ]
     if not names:
         return []
@@ -235,7 +250,10 @@ async def _list_entities_unscoped(rag: "LightRAG", limit: int = 500) -> List[dic
     # to discard anyway.
     names = [
         n for n in names
-        if n and not is_artifact_id(n) and not is_figure_label_entity(n)
+        if n
+        and not is_artifact_id(n)
+        and not is_figure_label_entity(n)
+        and not is_instance_label_entity(n)
     ]
     if not names:
         return []
@@ -366,10 +384,15 @@ async def sample_seeds(
                 exc_info=True,
             )
             sel = None
-        if sel and sel.seeds:
+        # Honour the pedagogical result if it produced seeds OR if it ran
+        # successfully and is authoritative (an empty result because the floor
+        # legitimately emptied the pool — NOT a failure). Only a true failure
+        # (scorer raised, or no candidates at all → non-authoritative empty)
+        # falls back to the floor-less random baseline.
+        if sel is not None and (sel.seeds or sel.authoritative):
             return sel
         logger.warning(
-            "sample_seeds(%s): pedagogical selection produced no seeds; "
+            "sample_seeds(%s): pedagogical selection found no candidates; "
             "falling back to random baseline.",
             mode,
         )
@@ -503,11 +526,15 @@ async def _sample_seeds_pedagogical(
             n,
         )
 
+    # Authoritative: candidates existed and were scored/allocated. Even an empty
+    # result here is a real "nothing cleared the floor" outcome and must be
+    # honoured rather than replaced by the random baseline.
     return SeedSelection(
         seeds=seeds,
         strategy=strategy,
         file_contributions=contributions,
         seed_scores=seed_scores,
+        authoritative=True,
     )
 
 
