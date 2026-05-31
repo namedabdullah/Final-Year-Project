@@ -81,7 +81,19 @@ class RetrievalMetadata(BaseModel):
     seed_query: str = Field("", description="The seed query used to bootstrap retrieval.")
     seed_strategy: str = Field(
         "entity",
-        description="'entity' (degree-weighted) or 'chunk' (first-sentence) sampling.",
+        description=(
+            "Seed sampling strategy actually used, e.g. 'entity'/'chunk' (random "
+            "baseline) or 'entity-pedagogical'/'chunk-pedagogical' (RRF scorer)."
+        ),
+    )
+    # Pedagogical-scorer transparency (quality-plan.md §5/§9). None for the
+    # random baseline; populated when QUIZ_SEED_STRATEGY=pedagogical.
+    seed_score: Optional[float] = Field(
+        None, description="RRF fusion score of the seed that produced this question."
+    )
+    seed_score_components: dict = Field(
+        default_factory=dict,
+        description="Per-signal ranks behind the RRF score, e.g. {'deg': 3, 'xdoc': 1, 'freq': 5}.",
     )
 
 
@@ -89,9 +101,34 @@ class GenerationMetadata(BaseModel):
     """Records the generation call details."""
 
     model: str = Field("gpt-4o")
-    prompt_template_id: str = Field("", description="e.g. 'easy_v1', 'hard_v1'")
+    prompt_template_id: str = Field("", description="e.g. 'easy_v2', 'hard_v2'")
     question: str = ""
     reference_answer: str = ""
+    # Diagnostic — no behavioral impact, used for analytics & thesis reporting.
+    # See lightrag/quiz/diagnostics.py for the heuristic definitions.
+    figure_dependency_estimate: float = Field(
+        0.0,
+        description=(
+            "0.0 = question is fully concept-based; "
+            "1.0 = question reads like a label/cell lookup from a figure."
+        ),
+    )
+    source_lexical_overlap: float = Field(
+        0.0,
+        description=(
+            "Stopword-filtered Jaccard overlap between question tokens and "
+            "the top retrieved chunk tokens. Higher = more extractive surface form."
+        ),
+    )
+    retrieved_chunk_count: int = Field(
+        0,
+        description=(
+            "Number of in-scope chunks retrieved for this question. "
+            "0 means the question was generated from an empty retrieval — "
+            "should never occur after R6-2 (anti-hallucination guard), but "
+            "the field gives downstream analytics a column to detect any leak."
+        ),
+    )
 
 
 class VerificationMetadata(BaseModel):
@@ -112,6 +149,27 @@ class HumanRatingMetadata(BaseModel):
     rater_id: str = ""
     rating: int = Field(0, ge=1, le=5)
     notes: str = ""
+
+
+class FileContribution(BaseModel):
+    """Per-file seed contribution for a quiz (quality-plan.md §6.2).
+
+    Surfaces *which* selected documents actually drove the quiz and *why* a file
+    contributed nothing — so "this file added nothing" is visible rather than
+    silent. Contribution is earned via the Cap+Merit+Floor allocator, never
+    assigned up front.
+    """
+
+    doc_id: str
+    seed_count: int = 0
+    reason: Literal["contributed", "below_threshold", "outranked", "capped"] = Field(
+        "outranked",
+        description=(
+            "contributed = ≥1 seed; below_threshold = all candidates failed the "
+            "meaningfulness floor; outranked = lost the global ranking; "
+            "capped = hit the per-file cap (see seed_count)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +221,21 @@ class QuizGenerateResponse(BaseModel):
     warnings: List[str] = Field(
         default_factory=list,
         description="Non-fatal warnings (e.g. seed sampling fell back to replacement).",
+    )
+    file_contributions: List[FileContribution] = Field(
+        default_factory=list,
+        description=(
+            "Per-file seed contribution (quality-plan.md §6.2). Empty for the "
+            "random-baseline seed strategy."
+        ),
+    )
+    diversity: dict = Field(
+        default_factory=dict,
+        description=(
+            "Quiz-level diversity metrics (quality-plan.md §8.1), e.g. "
+            "{'mean_pairwise_similarity': .., 'max_pairwise_similarity': ..}. "
+            "Populated in Phase 4."
+        ),
     )
 
 

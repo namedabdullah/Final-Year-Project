@@ -395,6 +395,53 @@ Prompts should NOT solely define difficulty.
 
 # Easy Prompt
 
+> **Revision v6 (2026-05-29, follow-up to v5)**: Positional reorder of
+> the Already-asked block (now AFTER context, with a Final-reminder
+> sentence) after `quiz-44fbc845-…` showed GPT-4o-mini ignoring the
+> R5-1 anti-repeat list once it grew long. Paired with two non-prompt
+> changes: (a) `pipeline.py:_generate_one` refuses to call the
+> generator on empty retrievals (was hallucinating Unix command
+> answers from training data); (b) `seeds.py:_list_chunks_in_scope`
+> reads chunks via `doc_status.chunks_list` instead of the broken
+> `chunks_vdb.query("the")` — same fix the entity path got in R3.
+>
+> **Revision v5 (2026-05-28, same-day follow-up to v4)**: Two
+> structural prompt additions after `quiz-a712071b-…` showed the LLM
+> converging on a handful of "safe" easy concepts regardless of seed
+> diversity (3× "role of CPU", 4× "function of OS"): (a) added a
+> `Target concept:` line so the LLM anchors each question on the seed
+> entity; (b) added an `Already asked (DO NOT REPEAT or REPHRASE):`
+> block populated with every question generated earlier in the same
+> quiz, read sequentially under the generation semaphore. Also paired
+> with a seed-pool filter that drops figure-label entities (e.g.
+> `Multilevel Queue Scheduling Diagram`).
+>
+> **Revision v4 (2026-05-28, same-day follow-up to v3)**: Three
+> refinements after `quiz-caaf0e4a-…` exposed residual failures:
+> (a) hardened the placeholder rule into an absolute "no braces in
+> output" prohibition with examples, moved to the first position in
+> the Avoid block; (b) added an explicit anti-tautology rule (catches
+> "What kind of embedded OS is designed for embedded systems?" shapes);
+> (c) added an anti-meta-question rule (catches "What documents are
+> covered?" shapes). Paired with the formatter change in
+> `lightrag/quiz/retrieval.py` that removes the `=== Topic ===`
+> section, which was the source of the meta-question failure mode.
+>
+> **Revision v3 (2026-05-28, same-day follow-up to v2)**: Added a
+> placeholder-handling bullet to the Avoid block — the retrieval
+> formatter redacts instance labels into braced concept slots
+> (`{thread}`, `{process}`, …) and v2 inadvertently let GPT-4o-mini echo
+> those tokens into questions (see `quiz-bd12fd67-…`). v3 instructs the
+> generator to expand placeholders into natural English.
+>
+> **Revision v2 (2026-05-28)**: Added explicit anti-pattern guidance to
+> avoid diagram-label and table-cell extraction questions; promoted the
+> figure-independence heuristic into the prompt. Softened the answer
+> shape from "single fact / name / number / short phrase" to "single
+> short conceptual statement". Original v1 text preserved in git
+> history. Quiz records produced before this date remain tagged
+> `easy_v1` for traceability. See `quiz-fix-plan.md` for rationale.
+
 ```text
 Generate one quiz question answerable directly from the provided context.
 
@@ -402,11 +449,75 @@ Constraints:
 - Use factual reasoning only
 - Do not require combining multiple ideas
 - The answer must exist explicitly in the context
+- The answer should be a single short conceptual statement (one sentence)
+  drawn directly from the context, not a verbatim table cell or label
+
+Avoid (CRITICAL — ALL of the following are HARD rules):
+- ABSOLUTE RULE — NO BRACE CHARACTERS IN OUTPUT: The retrieved context
+  contains placeholder tokens like {thread}, {process}, {cpu_core},
+  {memory_page}, {memory_frame}, and {semaphore}. These are concept-slot
+  markers, NOT real words. If your question OR reference_answer contains
+  ANY brace character ({ or }), you have FAILED the task. Always rewrite
+  in natural English. Example of FAILURE: "What is the burst time of
+  {process}?". Example of SUCCESS: "What does burst time measure for
+  a process?".
+- ABSOLUTE RULE — NO TAUTOLOGIES: The reference_answer must not just
+  restate the question. Example of FAILURE: Q="What kind of OS is
+  designed for embedded systems?" A="An embedded OS designed for embedded
+  systems." A correct question requires genuine information to answer.
+- Do NOT ask meta-questions about the source material itself (e.g.
+  "What documents are covered?", "What does the material describe?",
+  "How many documents are in the study?"). Ask about the SUBJECT MATTER
+  (operating systems, threads, scheduling, …), not about the documents.
+- Do NOT ask about diagram labels, table cell values, figure identifiers,
+  or instance names (e.g., "P1", "Thread A", "core 3", "CPU_7", "Page 3").
+- Do NOT ask "what is the label of…" or "what is the name of the … in the diagram".
+- Reference the underlying concept (e.g., "process", "thread", "CPU core",
+  "memory page"), not the specific label the figure uses for one instance.
+- The reference_answer must be a conceptual statement, not a single
+  token, table cell, or figure label.
+- If the question would not make sense to a student without seeing the
+  original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
+  section below is non-empty, your question must NOT cover the same
+  concept, phrasing, or answer as any item in that list.
+
+Target concept: <seed entity name, normalised to concept noun>
+
+Context:
+<retrieved context block, with instance labels redacted to {concept-slot} placeholders>
+
+Already asked (DO NOT REPEAT or REPHRASE any of these):
+<numbered list of every prior question in this quiz>
+
+Final reminder: generate ONE question that is NOT semantically equivalent
+to any item in the "Already asked" list above. If your first draft repeats
+any prior question's concept or phrasing, rewrite it before returning JSON.
 ```
 
 ---
 
 # Medium Prompt
+
+> **Revision v6 (2026-05-29, follow-up to v5)**: Same positional reorder
+> as Easy v6 — Already-asked block moved AFTER context with a
+> Final-reminder sentence.
+>
+> **Revision v5 (2026-05-28, same-day follow-up to v4)**: Same two
+> additions as Easy v5 — Target concept line and Already-asked anti-repeat
+> block.
+>
+> **Revision v4 (2026-05-28, same-day follow-up to v3)**: Same three
+> refinements applied as Easy v4 — hardened placeholder rule, anti-tautology,
+> anti-meta-question.
+>
+> **Revision v3 (2026-05-28, same-day follow-up to v2)**: Same
+> placeholder-handling bullet added as Easy v3.
+>
+> **Revision v2 (2026-05-28)**: Added the same anti-pattern Avoid block as
+> Easy. Comparative-reasoning requirement unchanged. Original v1 text
+> preserved in git history. Quiz records produced before this date remain
+> tagged `medium_v1`. See `quiz-fix-plan.md`.
 
 ```text
 Generate one quiz question that requires comparing or connecting information from multiple context sections.
@@ -414,11 +525,64 @@ Generate one quiz question that requires comparing or connecting information fro
 Constraints:
 - Use comparative reasoning
 - The answer should require synthesizing at least 2 retrieved chunks
+
+Avoid (CRITICAL — ALL of the following are HARD rules):
+- ABSOLUTE RULE — NO BRACE CHARACTERS IN OUTPUT: The retrieved context
+  contains placeholder tokens like {thread}, {process}, {cpu_core},
+  {memory_page}, {memory_frame}, and {semaphore}. These are concept-slot
+  markers, NOT real words. If your question OR reference_answer contains
+  ANY brace character ({ or }), you have FAILED the task. Always rewrite
+  in natural English. Example of FAILURE: "What is the burst time of
+  {process}?". Example of SUCCESS: "What does burst time measure for
+  a process?".
+- ABSOLUTE RULE — NO TAUTOLOGIES: The reference_answer must not just
+  restate the question. Example of FAILURE: Q="What kind of OS is
+  designed for embedded systems?" A="An embedded OS designed for embedded
+  systems." A correct question requires genuine information to answer.
+- Do NOT ask meta-questions about the source material itself (e.g.
+  "What documents are covered?", "What does the material describe?",
+  "How many documents are in the study?"). Ask about the SUBJECT MATTER
+  (operating systems, threads, scheduling, …), not about the documents.
+- Do NOT ask about diagram labels, table cell values, figure identifiers,
+  or instance names (e.g., "P1", "Thread A", "core 3", "CPU_7", "Page 3").
+- Do NOT ask "what is the label of…" or "what is the name of the … in the diagram".
+- Reference the underlying concept (e.g., "process", "thread", "CPU core",
+  "memory page"), not the specific label the figure uses for one instance.
+- The reference_answer must be a conceptual statement, not a single
+  token, table cell, or figure label.
+- If the question would not make sense to a student without seeing the
+  original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
+  section below is non-empty, your question must NOT cover the same
+  concept, phrasing, or answer as any item in that list.
+
+Target concept: <seed entity name, normalised to concept noun>
+
+Context:
+<retrieved context block, with instance labels redacted to {concept-slot} placeholders>
+
+Already asked (DO NOT REPEAT or REPHRASE any of these):
+<numbered list of every prior question in this quiz>
+
+Final reminder: generate ONE question that is NOT semantically equivalent
+to any item in the "Already asked" list above. If your first draft repeats
+any prior question's concept or phrasing, rewrite it before returning JSON.
 ```
 
 ---
 
 # Hard Prompt
+
+> **Revision v4 (2026-05-28, same-day follow-up to v3)**: Same three
+> refinements applied as Easy v4.
+>
+> **Revision v3 (2026-05-28, same-day follow-up to v2)**: Same
+> placeholder-handling bullet added as Easy v3.
+>
+> **Revision v2 (2026-05-28)**: Added the same anti-pattern Avoid block as
+> Easy/Medium. Multi-step reasoning requirement unchanged. Original v1
+> text preserved in git history. Quiz records produced before this date
+> remain tagged `hard_v1`. See `quiz-fix-plan.md`.
 
 ```text
 Generate one quiz question requiring multi-step reasoning.
@@ -427,6 +591,48 @@ Constraints:
 - Use causal, inferential, or analytical reasoning
 - The answer should require combining information from at least 3 retrieved context sections
 - Avoid direct fact lookup questions
+
+Avoid (CRITICAL — ALL of the following are HARD rules):
+- ABSOLUTE RULE — NO BRACE CHARACTERS IN OUTPUT: The retrieved context
+  contains placeholder tokens like {thread}, {process}, {cpu_core},
+  {memory_page}, {memory_frame}, and {semaphore}. These are concept-slot
+  markers, NOT real words. If your question OR reference_answer contains
+  ANY brace character ({ or }), you have FAILED the task. Always rewrite
+  in natural English. Example of FAILURE: "What is the burst time of
+  {process}?". Example of SUCCESS: "What does burst time measure for
+  a process?".
+- ABSOLUTE RULE — NO TAUTOLOGIES: The reference_answer must not just
+  restate the question. Example of FAILURE: Q="What kind of OS is
+  designed for embedded systems?" A="An embedded OS designed for embedded
+  systems." A correct question requires genuine information to answer.
+- Do NOT ask meta-questions about the source material itself (e.g.
+  "What documents are covered?", "What does the material describe?",
+  "How many documents are in the study?"). Ask about the SUBJECT MATTER
+  (operating systems, threads, scheduling, …), not about the documents.
+- Do NOT ask about diagram labels, table cell values, figure identifiers,
+  or instance names (e.g., "P1", "Thread A", "core 3", "CPU_7", "Page 3").
+- Do NOT ask "what is the label of…" or "what is the name of the … in the diagram".
+- Reference the underlying concept (e.g., "process", "thread", "CPU core",
+  "memory page"), not the specific label the figure uses for one instance.
+- The reference_answer must be a conceptual statement, not a single
+  token, table cell, or figure label.
+- If the question would not make sense to a student without seeing the
+  original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
+  section below is non-empty, your question must NOT cover the same
+  concept, phrasing, or answer as any item in that list.
+
+Target concept: <seed entity name, normalised to concept noun>
+
+Context:
+<retrieved context block, with instance labels redacted to {concept-slot} placeholders>
+
+Already asked (DO NOT REPEAT or REPHRASE any of these):
+<numbered list of every prior question in this quiz>
+
+Final reminder: generate ONE question that is NOT semantically equivalent
+to any item in the "Already asked" list above. If your first draft repeats
+any prior question's concept or phrasing, rewrite it before returning JSON.
 ```
 
 ---
