@@ -56,6 +56,19 @@ class QuizGenerateRequest(BaseModel):
     user_prompt: Optional[str] = None
 
 
+class QuizAblationRequest(BaseModel):
+    """Request body for POST /quiz/ablation (Phase-4 ablation harness).
+
+    Runs the deterministic seed-scoring ablation/sensitivity study for one arm
+    against the live index — no LLM calls, no quiz generated (quality-plan.md
+    §8.2). Used by the experiment runner to produce thesis-appendix evidence.
+    """
+
+    document_ids: List[str] = Field(..., min_length=1)
+    mode: Literal["mix", "naive"] = "mix"
+    num_questions: Literal[10, 25, 50] = 25
+
+
 # ---------------------------------------------------------------------------
 # Sub-models for per-question metadata
 # ---------------------------------------------------------------------------

@@ -101,7 +101,11 @@ if the ablation (A6) shows degree is the weak signal.
 ## C. Validation exists as tooling but has NOT been run  · **P1**
 
 The Phase-4 / Phase-5 *logic* is implemented and unit-tested, but the *runs* that
-produce the thesis evidence need the live index + API keys:
+produce the thesis evidence need the live index + API keys. A one-command runner
+now drives them over the running server's HTTP API:
+``scripts/run_quiz_experiments.py {matrix|ablation|compare}`` (matrix → Phase 5;
+ablation → Phase 4.2 via the new `POST /quiz/ablation` endpoint; compare → Phase
+4.3 pedagogical-vs-random proxy-quality diff). Outstanding *runs*:
 
 - **Ablation / sensitivity** (`lightrag/quiz/ablation.py:run_ablation`) — never
   executed against the real corpus. Run it per arm to identify the load-bearing
