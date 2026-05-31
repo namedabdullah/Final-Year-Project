@@ -10,10 +10,16 @@
 > `ablation.py`), Phase 5 tooling (matrix runner + `summarize_quiz` in
 > `matrix.py`). Code in `scoring.py` / `seeds.py` / `schemas.py` / `pipeline.py`
 > / `diagnostics.py` / `ablation.py` / `matrix.py`, behind `QUIZ_SEED_STRATEGY`
-> (default `pedagogical`, `random` baseline retained). Unit-tested in
-> `tests/test_quiz_scoring.py` (21 tests, all passing).
+> (default `pedagogical`, `random` baseline retained).
+> **Post-smoke refinements**: Step 1 (deterministic instance-label + anchor +
+> token floors), Step 1b (embedded-artifact anchor detection), and Step 2 (the
+> LLM educational-importance re-rank signal in `llm_importance.py` — re-rank
+> only, top-N, temperature-0 + disk-cached, symmetric across arms, graceful
+> no-op without an API key). Unit-tested in `tests/test_quiz_scoring.py`
+> (58 tests, all passing).
 > **Still requires a live run (not code)**: the Phase 5 matrix generation and
-> the Phase 4 ablation/proxy-quality *runs* need the indexed corpus + API keys.
+> the Phase 4 ablation/proxy-quality *runs* need the indexed corpus + API keys;
+> Step 2's effect needs a live smoke run to confirm.
 > **Known gaps & deviations**: see `suggestions.md`.
 > **Scope**: How the quiz pipeline chooses *what to ask about* (seeds), how it
 > guarantees *meaningful multi-file contribution*, how it enforces *diversity*,

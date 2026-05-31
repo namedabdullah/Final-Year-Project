@@ -218,6 +218,39 @@ agents. **Applied fixes** from the review:
 
 ---
 
+## H. Step 2 implemented (2026-05) — LLM importance re-rank
+
+The A3 gap (LLM reinforcement layer) is now built in `lightrag/quiz/llm_importance.py`
+and wired into the pedagogical sampler:
+
+- **Role: re-rank only** (user's choice) — a 1–10 educational-importance score is
+  folded in as an extra RRF signal (`scoring.apply_llm_rerank`); nothing is
+  hard-dropped. Un-scored candidates get the *mean* (neutral).
+- **Top-N only** (`QUIZ_SEED_LLM_TOPN`, default 50) → one batched call per quiz.
+- **Temperature 0 + disk cache** (`quiz_llm_importance_cache.json` in the working
+  dir, keyed by doc-set + text) → reproducible matrix, each concept judged once.
+- **Symmetric** across arms; **pedagogical path only** (random baseline stays
+  LLM-free, so the ablation control is clean).
+- **Graceful no-op** without an API key / on API error → deterministic ranking
+  stands; a quiz never fails because of this layer.
+- Config: `QUIZ_SEED_LLM_RERANK` (default true), `QUIZ_SEED_LLM_TOPN`,
+  `QUIZ_SEED_LLM_MODEL`.
+
+**Residual for Step 2 (P1/P2):**
+- **Not yet validated live** — the re-rank's *effect* (do `process_burst_start_times`,
+  the `CSC 323` title slide, `Windows`, `Running`, `Process P2` actually sink?)
+  needs a live smoke run. **P1**
+- **Soft/hard gate deferred** — only the re-rank role is built; the optional
+  bottom gate (exclude very-low-scored) was not requested. Revisit if re-rank
+  alone leaves weak seeds. **P2**
+- **No live test of the API call** — `_parse_scores`/`_cache_key`/`_build_prompt`
+  and `apply_llm_rerank` are unit-tested; the network call is exercised only by
+  the live smoke run (no DB/API mocking). **P2**
+- **Prompt validation** — the importance rubric is OS-course-tuned; confirm it
+  generalises before using on other corpora. **P2**
+
+---
+
 ## Recommended next steps (in order)
 
 1. **(P1)** Live smoke run, both arms — confirm the new scorer works on the real

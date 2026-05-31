@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Set
 
 from lightrag.constants import GRAPH_FIELD_SEP
-from lightrag.quiz import scoring
+from lightrag.quiz import llm_importance, scoring
 from lightrag.quiz.artifacts import (
     is_artifact_id,
     is_figure_label_entity,
@@ -481,6 +481,52 @@ async def _fetch_seed_embeddings(
         return {}
 
 
+async def _apply_llm_rerank(
+    rag: "LightRAG",
+    mode: str,
+    rows: List[dict],
+    scope_doc_ids: Set[str],
+) -> None:
+    """Step 2: score the top-N candidates for educational importance and fold the
+    result in as an extra RRF signal (re-rank only). Best-effort — any failure
+    (no API key, API error) leaves the deterministic ranking untouched.
+    """
+    if not llm_importance.is_enabled():
+        return
+    base_signals = scoring.MIX_SIGNALS if mode == "mix" else scoring.NAIVE_SIGNALS
+    top = sorted(rows, key=lambda r: r.get("rrf_score", 0.0), reverse=True)[
+        : llm_importance.top_n()
+    ]
+    candidates = [
+        (r["key"], (r.get("seed") or r.get("key") or ""))
+        for r in top
+        if r.get("key")
+    ]
+    if not candidates:
+        return
+    doc_set_key = "|".join(sorted(str(d) for d in scope_doc_ids))
+    try:
+        scores = await llm_importance.score_importance(
+            candidates,
+            doc_set_key=doc_set_key,
+            working_dir=rag.working_dir,
+        )
+    except Exception as exc:
+        logger.warning(
+            "sample_seeds(%s): LLM re-rank failed (%s); deterministic ranking stands.",
+            mode,
+            exc,
+        )
+        return
+    if scores:
+        scoring.apply_llm_rerank(rows, base_signals, scores)
+        logger.info(
+            "sample_seeds(%s): applied LLM importance re-rank over %d candidates.",
+            mode,
+            len(scores),
+        )
+
+
 async def _sample_seeds_pedagogical(
     rag: "LightRAG",
     mode: str,
@@ -492,6 +538,14 @@ async def _sample_seeds_pedagogical(
 
     if not rows:
         return SeedSelection(seeds=[], strategy=strategy)
+
+    # Step 2 — LLM educational-importance re-rank (re-rank only; quality-plan.md
+    # D4). Folds a semantic 1-10 importance score in as an extra RRF signal so
+    # weak seeds the deterministic signals can't judge (title slides, filler,
+    # snake_case table identifiers, instance labels) sink. Graceful no-op without
+    # an API key. Runs only on the pedagogical path, so the random baseline and
+    # the Phase-4 ablation control stay LLM-free.
+    await _apply_llm_rerank(rag, mode, rows, scope_doc_ids)
 
     # Phase 3 — clustering-for-coverage. Embeddings are best-effort; on failure
     # diversify() is a no-op and allocate falls back to raw RRF order.

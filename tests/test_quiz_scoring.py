@@ -252,6 +252,74 @@ def test_is_embedded_anchor_helper():
     assert scoring._is_embedded_anchor(long_lead + f'<drawing id="im-{hexid}-0003">') is False
 
 
+# ---------------------------------------------------------------------------
+# Step 2 — LLM importance re-rank (pure mechanics)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_llm_rerank_adds_signal_and_refuses():
+    rows = [{"key": "a", "signals": {"x": 5.0}}, {"key": "b", "signals": {"x": 1.0}}]
+    scoring.fuse_rrf(rows, ["x"], k=1)
+    scoring.apply_llm_rerank(rows, ["x"], {"a": 9.0, "b": 2.0})
+    assert all("llm" in r["signals"] for r in rows)
+    assert all("llm" in r["ranks"] for r in rows)
+    rd = {r["key"]: r["rrf_score"] for r in rows}
+    assert rd["a"] > rd["b"]  # a leads on both x and llm
+
+
+def test_apply_llm_rerank_neutral_for_unscored():
+    rows = [
+        {"key": "a", "signals": {"x": 1.0}},
+        {"key": "b", "signals": {"x": 1.0}},
+        {"key": "c", "signals": {"x": 1.0}},
+    ]
+    scoring.fuse_rrf(rows, ["x"])
+    scoring.apply_llm_rerank(rows, ["x"], {"a": 10.0, "b": 2.0})  # c unscored
+    by_key = {r["key"]: r for r in rows}
+    assert by_key["c"]["signals"]["llm"] == 6.0  # mean of {10, 2}
+
+
+def test_apply_llm_rerank_noop_without_scores():
+    rows = [{"key": "a", "signals": {"x": 5.0}}]
+    scoring.fuse_rrf(rows, ["x"])
+    before = rows[0]["rrf_score"]
+    scoring.apply_llm_rerank(rows, ["x"], {})
+    assert rows[0]["rrf_score"] == before
+    assert "llm" not in rows[0]["signals"]
+
+
+def test_apply_llm_rerank_reapplies_hub_penalty():
+    rows = [
+        {"key": "hub", "signals": {"x": 9.0}, "is_hub": True},
+        {"key": "norm", "signals": {"x": 9.0}, "is_hub": False},
+    ]
+    scoring.fuse_rrf(rows, ["x"])
+    scoring.apply_llm_rerank(rows, ["x"], {"hub": 9.0, "norm": 9.0})
+    by_key = {r["key"]: r for r in rows}
+    # Hub penalty (0.5×) re-applied after the re-fuse → hub scored below norm.
+    assert by_key["hub"]["rrf_score"] < by_key["norm"]["rrf_score"]
+
+
+def test_llm_importance_parse_scores():
+    from lightrag.quiz import llm_importance
+
+    raw = '{"scores":[{"i":1,"score":8},{"i":2,"score":15},{"i":3,"score":"x"}]}'
+    out = llm_importance._parse_scores(raw, 3)
+    assert out[0] == 8.0        # i=1 → index 0
+    assert out[1] == 10.0       # 15 clamped to 10 (i=2 → index 1)
+    assert 2 not in out         # non-numeric score skipped
+    assert llm_importance._parse_scores("not json", 3) == {}
+
+
+def test_llm_importance_cache_key_and_prompt():
+    from lightrag.quiz import llm_importance
+
+    assert llm_importance._cache_key("docs", "Memory") == llm_importance._cache_key("docs", "Memory")
+    assert llm_importance._cache_key("docs", "Memory") != llm_importance._cache_key("other", "Memory")
+    p = llm_importance._build_prompt(["Memory", "Scheduling"])
+    assert "1. Memory" in p and "2. Scheduling" in p
+
+
 def test_naive_floor_rejects_anchor_and_title_slides():
     chunks = [
         # Bare table anchor → excluded by default (QUIZ_NAIVE_EXCLUDE_ANCHORS).

@@ -154,6 +154,31 @@ def fuse_rrf(
         r["rrf_score"] = sum(weights.get(s, 1.0) / (k + ranks[s]) for s in signal_keys)
 
 
+def apply_llm_rerank(
+    rows: List[dict],
+    base_signals: Sequence[str],
+    llm_scores: Dict[str, float],
+) -> None:
+    """Fold an LLM educational-importance score in as an extra RRF signal (Step 2).
+
+    Re-rank ONLY: adds an ``llm`` signal and re-fuses RRF over
+    ``base_signals + ['llm']`` in place. Nothing is dropped. Candidates the LLM
+    did not score receive the *mean* of the provided scores (a neutral rank), so
+    an un-judged candidate is neither boosted nor penalised. No-op when
+    ``llm_scores`` is empty (e.g. no API key), leaving the deterministic ranking
+    untouched. The mix anti-hub penalty is re-applied after the re-fuse.
+    """
+    if not rows or not llm_scores:
+        return
+    neutral = sum(llm_scores.values()) / len(llm_scores)
+    for r in rows:
+        r["signals"]["llm"] = float(llm_scores.get(r.get("key", ""), neutral))
+    fuse_rrf(rows, list(base_signals) + ["llm"])
+    for r in rows:
+        if r.get("is_hub"):
+            r["rrf_score"] *= _HUB_PENALTY
+
+
 def allocate(
     rows: List[dict],
     n: int,
