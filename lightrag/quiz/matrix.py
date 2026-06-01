@@ -24,7 +24,6 @@ import logging
 from collections import Counter
 from typing import List, Optional, Sequence
 
-from lightrag.quiz.diagnostics import reasoning_is_appropriate
 from lightrag.quiz.pipeline import generate_quiz
 from lightrag.quiz.schemas import QuizGenerateRequest, QuizGenerateResponse
 
@@ -59,16 +58,12 @@ def summarize_quiz(response: QuizGenerateResponse) -> dict:
         "generated": len(qs),
         # Verifier flag rates (None when verification was off).
         "answerable_rate": _rate([v.answerable_from_context for v in ver]),
+        # complexity_match / reasoning_match are computed deterministically in
+        # verification.py: complexity is FLOOR-based (hard needs >=2 pieces, not
+        # exactly 3) and reasoning is TIER-based (hard accepts causal/inferential/
+        # analytical) — not brittle exact matches.
         "complexity_match_rate": _rate([v.claimed_complexity_matches for v in ver]),
         "reasoning_match_rate": _rate([v.claimed_reasoning_matches for v in ver]),
-        # Depth-tier reasoning appropriateness: causal/inferential/analytical all
-        # count as 'deep' for hard, so legitimate within-tier variation isn't a
-        # miss (see diagnostics.reasoning_is_appropriate). The exact-match rate
-        # above is kept for transparency.
-        "reasoning_appropriate_rate": _rate([
-            reasoning_is_appropriate(q.difficulty, q.verification.actual_reasoning_type)
-            for q in qs if q.verification is not None
-        ]),
         "reasoning_types": dict(Counter(v.actual_reasoning_type for v in ver)),
         # Pedagogy judge (Goal 1) + optional correctness fact-check. Means are over
         # *scored* questions only (0 = unscored mock); None when the judge didn't run.

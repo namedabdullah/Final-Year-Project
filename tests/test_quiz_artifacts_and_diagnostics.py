@@ -22,9 +22,11 @@ from lightrag.quiz.artifacts import (
     redact_instance_labels,
 )
 from lightrag.quiz.diagnostics import (
+    complexity_is_appropriate,
     estimate_clarity,
     estimate_figure_dependency,
     reasoning_is_appropriate,
+    reasoning_types_match,
     source_lexical_overlap,
 )
 
@@ -243,3 +245,50 @@ def test_estimate_clarity_multi_sentence_is_penalized() -> None:
     one = estimate_clarity("What is paging?")
     two = estimate_clarity("What is paging? How does it differ from segmentation?")
     assert two < one
+
+
+# ---------------------------------------------------------------------------
+# reasoning_types_match (per-question tier match: hard accepts the deep set)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "claimed, actual, expected",
+    [
+        ("causal", "causal", True),
+        ("causal", "analytical", True),    # the fix: hard 'causal' accepts analytical
+        ("causal", "inferential", True),
+        ("causal", "comparative", False),  # tier 3 vs tier 2
+        ("causal", "factual", False),
+        ("comparative", "comparative", True),
+        ("comparative", "causal", False),  # medium claim, deeper actual
+        ("factual", "factual", True),
+        ("causal", "", False),             # unknown actual
+        ("", "causal", False),             # unknown claim
+        ("causal", "analyze", False),      # not a canonical type -> unknown
+    ],
+)
+def test_reasoning_types_match(claimed: str, actual: str, expected: bool) -> None:
+    assert reasoning_types_match(claimed, actual) is expected
+
+
+# ---------------------------------------------------------------------------
+# complexity_is_appropriate (floor-based: hard needs >=2 pieces, not exactly 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "claimed, actual, expected",
+    [
+        (3, 3, True),     # hard, needs 3
+        (3, 2, True),     # hard, needs 2 -> still appropriate (the fix)
+        (3, 1, False),    # hard, answerable from 1 -> too simple
+        (2, 2, True),     # medium
+        (2, 1, False),    # medium, too simple
+        (1, 1, True),     # easy
+        (1, 3, True),     # easy floor is 1, so a deeper question still clears it
+        (3, 0, False),
+    ],
+)
+def test_complexity_is_appropriate(claimed: int, actual: int, expected: bool) -> None:
+    assert complexity_is_appropriate(claimed, actual) is expected

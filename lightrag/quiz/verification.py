@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import json_repair
 
+from lightrag.quiz.diagnostics import complexity_is_appropriate, reasoning_types_match
 from lightrag.quiz.schemas import VerificationMetadata
 from lightrag.utils import logger
 
@@ -86,11 +87,26 @@ def _build_verifier_user_prompt(
     )
 
 
-def _parse_verification_json(raw: str, model: str) -> VerificationMetadata:
-    """Parse Claude Sonnet JSON response into VerificationMetadata.
+def _parse_verification_json(
+    raw: str,
+    model: str,
+    claimed_complexity: int,
+    claimed_reasoning_type: str,
+) -> VerificationMetadata:
+    """Parse the verifier JSON into VerificationMetadata.
 
-    Tries strict json.loads first, then json_repair.loads as fallback.
-    Raises ValueError if neither succeeds or required keys are absent.
+    The verifier LLM only *measures* (``actual_*`` + ``answerable_from_context``);
+    the claimed-vs-actual **match** booleans are computed deterministically here,
+    not trusted from the model's brittle exact-string comparison:
+      - reasoning match is **tier-based** (hard's ``causal`` accepts
+        causal/inferential/analytical) — see ``reasoning_types_match``;
+      - complexity match is **floor-based** (hard needs >=2 pieces, not exactly 3)
+        — see ``complexity_is_appropriate``.
+    So the locked prompt is unchanged, but a hard question that is analytical or
+    needs 2 pieces is no longer scored as a mismatch.
+
+    Tries strict json.loads first, then json_repair.loads. Raises ValueError if
+    neither succeeds or the measured keys are absent.
     """
     try:
         data = json.loads(raw)
@@ -98,12 +114,12 @@ def _parse_verification_json(raw: str, model: str) -> VerificationMetadata:
         logger.warning("verification: strict JSON parse failed; attempting json_repair")
         data = json_repair.loads(raw)
 
+    # Only the *measurements* are required; the model's own claimed_*_matches are
+    # ignored (recomputed below), so their absence is not an error.
     required_keys = {
         "actual_retrieval_complexity",
         "actual_reasoning_type",
         "answerable_from_context",
-        "claimed_complexity_matches",
-        "claimed_reasoning_matches",
         "notes",
     }
     missing = required_keys - set(data.keys())
@@ -112,13 +128,15 @@ def _parse_verification_json(raw: str, model: str) -> VerificationMetadata:
             f"verification: parsed JSON missing keys {missing}. raw={raw!r}"
         )
 
+    actual_complexity = int(data["actual_retrieval_complexity"])
+    actual_reasoning = str(data["actual_reasoning_type"])
     return VerificationMetadata(
         model=model,
-        actual_retrieval_complexity=int(data["actual_retrieval_complexity"]),
-        actual_reasoning_type=str(data["actual_reasoning_type"]),
+        actual_retrieval_complexity=actual_complexity,
+        actual_reasoning_type=actual_reasoning,
         answerable_from_context=bool(data["answerable_from_context"]),
-        claimed_complexity_matches=bool(data["claimed_complexity_matches"]),
-        claimed_reasoning_matches=bool(data["claimed_reasoning_matches"]),
+        claimed_complexity_matches=complexity_is_appropriate(claimed_complexity, actual_complexity),
+        claimed_reasoning_matches=reasoning_types_match(claimed_reasoning_type, actual_reasoning),
         notes=str(data["notes"]),
     )
 
@@ -178,7 +196,7 @@ async def _verify_with_openai(
             max_tokens=1024,
         )
         raw = response.choices[0].message.content or ""
-        result = _parse_verification_json(raw, model=model)
+        result = _parse_verification_json(raw, model, claimed_complexity, claimed_reasoning_type)
         logger.info(
             "verification: OpenAI fallback (%s) verified question — "
             "answerable=%s, complexity_match=%s, reasoning_match=%s",
@@ -302,7 +320,7 @@ async def verify_question(
             messages=[{"role": "user", "content": user_prompt}],
         )
         raw = response.content[0].text
-        result = _parse_verification_json(raw, model=model)
+        result = _parse_verification_json(raw, model, claimed_complexity, claimed_reasoning_type)
         logger.info(
             "verification: Claude Sonnet verified question — "
             "answerable=%s, complexity_match=%s, reasoning_match=%s",

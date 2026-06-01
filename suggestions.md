@@ -393,6 +393,30 @@ concurrently per question (`asyncio.gather`).
 no caching on the judge calls; LLM-clarity deferred (deterministic only); complexity-match
 reframe still open (see §J residual).
 
+## L. Per-question match fix: reasoning tiers + complexity floors (2026-06)
+
+The tier idea from §J now applies at the **per-question** level. The verifier LLM only
+*measures* (`actual_reasoning_type`, `actual_retrieval_complexity`, `answerable_from_context`);
+the claimed-vs-actual **match booleans are computed deterministically** in
+`verification._parse_verification_json` — the locked prompt is untouched.
+
+- **Reasoning** (`diagnostics.reasoning_types_match`): a match if claimed and actual share a
+  depth tier. Hard's `causal` (tier 3) accepts causal/inferential/analytical, so
+  `claimed_reasoning_matches` / `reasoning_match_rate` is no longer the brittle exact-string
+  match (on the live hard quizzes: exact 0.2/0.3 → tier 1.0).
+- **Complexity ("fix (a)")** (`diagnostics.complexity_is_appropriate`): reframed from exact
+  `claimed == actual` to a **floor** — the question must need at least the minimum pieces for
+  its level: easy≥1, medium≥2, **hard≥2** (we no longer insist a hard question need exactly the
+  3 pieces retrieved, only genuine synthesis). On the live hard quizzes: naive 0.1 → ~0.7,
+  mix → 1.0.
+- The aggregation-only `reasoning_appropriate_rate` (§J) is **removed** as redundant —
+  `reasoning_match_rate` is tier-based at the source now. `reasoning_types` (distribution) and
+  the raw `actual_*` fields remain for full transparency.
+- Tests: `reasoning_types_match` + `complexity_is_appropriate` cases added. **141 passing.**
+
+> The verifier LLM still *returns* its own `claimed_*_matches` per the locked prompt; we ignore
+> them and recompute. The model's job is to measure; the comparison is ours.
+
 ## Recommended next steps (in order)
 
 1. **(P1)** Live smoke run, both arms — confirm the new scorer works on the real

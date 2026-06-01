@@ -255,12 +255,48 @@ def reasoning_is_appropriate(difficulty: str, actual_reasoning_type: str) -> boo
     return got == exp
 
 
+def reasoning_types_match(claimed_reasoning_type: str, actual_reasoning_type: str) -> bool:
+    """True if claimed and actual reasoning types share a depth tier.
+
+    Per-question companion to :func:`reasoning_is_appropriate` for callers that
+    have the *claimed* type rather than the difficulty. Hard's claimed ``causal``
+    (tier 3) is satisfied by any tier-3 actual (causal / inferential / analytical),
+    so a hard question is no longer marked a mismatch merely for being analytical.
+    """
+    a = REASONING_TIER.get((claimed_reasoning_type or "").strip().lower())
+    b = REASONING_TIER.get((actual_reasoning_type or "").strip().lower())
+    return a is not None and b is not None and a == b
+
+
+# Minimum context pieces a question should require, keyed by its claimed retrieval
+# complexity (easy=1 / medium=2 / hard=3). Hard relaxes to >=2: we don't insist a
+# hard question need exactly the 3 pieces retrieved, only genuine synthesis (>=2).
+_MIN_PIECES_BY_CLAIM = {1: 1, 2: 2, 3: 2}
+
+
+def complexity_is_appropriate(claimed_complexity: int, actual_complexity: int) -> bool:
+    """True if the measured complexity meets the floor expected for the claim.
+
+    Reframes the brittle exact ``claimed == actual`` match: a hard question
+    (claimed 3) that genuinely needs 2 pieces still counts as appropriately
+    complex; a hard question answerable from 1 piece does not. Floor per claim:
+    easy(1)->1, medium(2)->2, hard(3)->2 (claims above 3 also floor at 2).
+    """
+    try:
+        floor = _MIN_PIECES_BY_CLAIM.get(int(claimed_complexity), 2)
+        return int(actual_complexity) >= floor
+    except (TypeError, ValueError):
+        return False
+
+
 __all__ = [
     "estimate_figure_dependency",
     "source_lexical_overlap",
     "estimate_clarity",
     "pairwise_cosine_stats",
     "reasoning_is_appropriate",
+    "reasoning_types_match",
+    "complexity_is_appropriate",
     "REASONING_TIER",
     "EXPECTED_REASONING_TIER",
 ]
