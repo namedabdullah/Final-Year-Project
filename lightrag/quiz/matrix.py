@@ -47,6 +47,8 @@ def summarize_quiz(response: QuizGenerateResponse) -> dict:
     """Aggregate one quiz into a row of holistic quality metrics."""
     qs = response.questions
     ver = [q.verification for q in qs if q.verification is not None]
+    ped = [q.pedagogy for q in qs if q.pedagogy is not None]
+    corr = [q.correctness for q in qs if q.correctness is not None]
     contribs = response.file_contributions
 
     return {
@@ -68,9 +70,17 @@ def summarize_quiz(response: QuizGenerateResponse) -> dict:
             for q in qs if q.verification is not None
         ]),
         "reasoning_types": dict(Counter(v.actual_reasoning_type for v in ver)),
-        # Diagnostic means (lower = more conceptual / less extractive).
+        # Pedagogy judge (Goal 1) + optional correctness fact-check. Means are over
+        # *scored* questions only (0 = unscored mock); None when the judge didn't run.
+        "pedagogical_value_mean": _mean([p.pedagogical_value for p in ped if p.pedagogical_value]),
+        "bloom_distribution": dict(Counter(p.bloom_level for p in ped if p.bloom_level)),
+        "answer_completeness_mean": _mean([p.answer_completeness for p in ped if p.answer_completeness]),
+        "answer_correctness_mean": _mean([c.answer_correctness for c in corr if c.answer_correctness]),
+        # Diagnostic means. figure-dependency / lexical-overlap: lower = better;
+        # clarity: HIGHER = better (more single-focus).
         "mean_figure_dependency": _mean([q.generation.figure_dependency_estimate for q in qs]),
         "mean_lexical_overlap": _mean([q.generation.source_lexical_overlap for q in qs]),
+        "mean_clarity": _mean([q.generation.clarity_heuristic for q in qs]),
         # Diversity (quality-plan.md §8.1) and multi-file contribution (§6.2).
         "diversity": response.diversity or {},
         "files_total": len(contribs),
@@ -122,6 +132,7 @@ def format_comparison(summaries: List[dict]) -> str:
         ("answerable_rate", "ans"),
         ("complexity_match_rate", "cplx"),
         ("reasoning_match_rate", "rsn"),
+        ("pedagogical_value_mean", "pedval"),
         ("mean_figure_dependency", "figdep"),
         ("files_contributed", "files+"),
     ]

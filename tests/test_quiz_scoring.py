@@ -520,29 +520,40 @@ def test_summarize_quiz_aggregates_quality_signals():
     from datetime import datetime, timezone
     from lightrag.quiz.matrix import summarize_quiz
     from lightrag.quiz.schemas import (
-        FileContribution, GenerationMetadata, QuizGenerateRequest,
-        QuizGenerateResponse, QuizQuestionMetadata, RetrievalMetadata,
-        VerificationMetadata,
+        CorrectnessMetadata, FileContribution, GenerationMetadata, PedagogyMetadata,
+        QuizGenerateRequest, QuizGenerateResponse, QuizQuestionMetadata,
+        RetrievalMetadata, VerificationMetadata,
     )
 
-    def _q(qid, fig, ans, cplx, rsn):
+    def _q(qid, fig, ans, cplx, rsn, clarity, pv, bloom, comp, corr):
         return QuizQuestionMetadata(
             question_id=qid, arm="graph", difficulty="easy",
             claimed_retrieval_complexity=1, claimed_reasoning_type="factual",
             retrieval=RetrievalMetadata(),
-            generation=GenerationMetadata(question=f"Q{qid}?", figure_dependency_estimate=fig),
+            generation=GenerationMetadata(
+                question=f"Q{qid}?",
+                figure_dependency_estimate=fig,
+                clarity_heuristic=clarity,
+            ),
             verification=VerificationMetadata(
                 answerable_from_context=ans,
                 claimed_complexity_matches=cplx,
                 claimed_reasoning_matches=rsn,
             ),
+            pedagogy=PedagogyMetadata(
+                pedagogical_value=pv, bloom_level=bloom, answer_completeness=comp,
+            ),
+            correctness=CorrectnessMetadata(answer_correctness=corr),
         )
 
     resp = QuizGenerateResponse(
         quiz_id="q", created_at=datetime.now(timezone.utc),
         request=QuizGenerateRequest(document_ids=["d1", "d2"], mode="mix",
                                     difficulty="easy", num_questions=10),
-        questions=[_q("1", 0.4, True, True, False), _q("2", 0.0, False, False, True)],
+        questions=[
+            _q("1", 0.4, True, True, False, 1.0, 4, "analyze", 5, 3),
+            _q("2", 0.0, False, False, True, 0.4, 2, "understand", 3, 5),
+        ],
         file_contributions=[
             FileContribution(doc_id="d1", seed_count=2, reason="contributed"),
             FileContribution(doc_id="d2", seed_count=0, reason="below_threshold"),
@@ -558,3 +569,9 @@ def test_summarize_quiz_aggregates_quality_signals():
     assert s["mean_figure_dependency"] == 0.2
     assert s["files_contributed"] == 1
     assert s["files_zero"] == ["d2"]
+    # New pedagogy / correctness / clarity aggregates.
+    assert s["pedagogical_value_mean"] == 3.0
+    assert s["answer_completeness_mean"] == 4.0
+    assert s["answer_correctness_mean"] == 4.0
+    assert s["mean_clarity"] == 0.7
+    assert s["bloom_distribution"] == {"analyze": 1, "understand": 1}

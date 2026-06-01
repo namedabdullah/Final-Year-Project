@@ -360,6 +360,39 @@ transparency) plus a `reasoning_types` distribution.
   changes the intended reasoning per difficulty, update `EXPECTED_REASONING_TIER`
   to match.
 
+## K. Pedagogy + correctness + clarity metrics (2026-06)
+
+Added five output-quality metrics so the matrix measures **pedagogical worth** and
+**correctness**, not just groundedness / calibration / coverage. The locked verifier prompt
+is **untouched** (user decision: separate judges, not a bundled verifier_v2).
+
+- **Clarity** (`diagnostics.estimate_clarity`, deterministic, no API): 0..1, **HIGHER =
+  more single-focus** (opposite direction to figure-dependency / lexical-overlap). Penalizes
+  length / multi-sentence / multi-clause pile-ons. → `GenerationMetadata.clarity_heuristic`.
+- **Pedagogy judge** (`pedagogy.judge_pedagogy`, separate Claude call under `run_verification`,
+  judged from Q+A only → cheap): `pedagogical_value` (1–5), `bloom_level` (Bloom's 6 levels —
+  *complements*, does not replace, `reasoning_type`/`reasoning_appropriate`),
+  `answer_completeness` (1–5). → `PedagogyMetadata`.
+- **Correctness** (`pedagogy.judge_correctness`, separate **optional** Claude call gated by the
+  new `run_correctness_check` request flag, default off): `answer_correctness` (1–5) — an
+  *independent* fact-check (correctness ≠ groundedness). → `CorrectnessMetadata`.
+- Both judges mirror `verification.py`: Claude → OpenAI fallback → conservative mock;
+  tolerant parsing with **defaults-on-omission** (a missing field never discards the rest).
+- Surfaced in `matrix.summarize_quiz` + the experiment runner: `pedagogical_value_mean`,
+  `bloom_distribution`, `answer_completeness_mean`, `answer_correctness_mean`, `mean_clarity`
+  (`pedval` column in the tables). Means are over *scored* questions only; `None` when a judge
+  didn't run.
+- Tests: `estimate_clarity` cases + new `tests/test_quiz_pedagogy.py` (parsers / bloom-normalize
+  / mocks) + extended summarizer test. **122 passing.**
+
+**Cost:** pedagogy runs with verification → matrix ~300 → ~600 Claude calls; correctness (when
+on) → ~900. Judge calls are cheap (Q+A only, no retrieval context); verifier + pedagogy run
+concurrently per question (`asyncio.gather`).
+
+**Open / follow-ups:** `reverify_quiz` re-runs verification only (not pedagogy/correctness);
+no caching on the judge calls; LLM-clarity deferred (deterministic only); complexity-match
+reframe still open (see §J residual).
+
 ## Recommended next steps (in order)
 
 1. **(P1)** Live smoke run, both arms — confirm the new scorer works on the real

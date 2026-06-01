@@ -22,6 +22,7 @@ from lightrag.quiz.artifacts import (
     redact_instance_labels,
 )
 from lightrag.quiz.diagnostics import (
+    estimate_clarity,
     estimate_figure_dependency,
     reasoning_is_appropriate,
     source_lexical_overlap,
@@ -209,3 +210,36 @@ def test_overlap_partial() -> None:
 )
 def test_reasoning_is_appropriate(difficulty: str, actual: str, expected: bool) -> None:
     assert reasoning_is_appropriate(difficulty, actual) is expected
+
+
+# ---------------------------------------------------------------------------
+# estimate_clarity (higher = clearer / more single-focus)
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_clarity_focused_question_scores_high() -> None:
+    score = estimate_clarity("What is the role of a semaphore in concurrent programming?")
+    assert score >= 0.9
+
+
+def test_estimate_clarity_overstuffed_question_scores_low() -> None:
+    # A real over-stuffed "hard" question: long, multi-clause, multiple connectives.
+    q = (
+        "How does the management of the process control block, including the correct "
+        "tracking of a process's state transitions and its resource allocation needs, "
+        "influence the overall efficiency of the CPU in a multi-process environment, "
+        "particularly when considering varied burst times and the implications of "
+        "context switching?"
+    )
+    assert estimate_clarity(q) <= 0.5
+
+
+def test_estimate_clarity_empty_is_zero() -> None:
+    assert estimate_clarity("") == 0.0
+    assert estimate_clarity("   ") == 0.0
+
+
+def test_estimate_clarity_multi_sentence_is_penalized() -> None:
+    one = estimate_clarity("What is paging?")
+    two = estimate_clarity("What is paging? How does it differ from segmentation?")
+    assert two < one

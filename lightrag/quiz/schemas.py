@@ -46,6 +46,14 @@ class QuizGenerateRequest(BaseModel):
         True,
         description="Whether to verify each question with Claude Sonnet after generation.",
     )
+    run_correctness_check: bool = Field(
+        False,
+        description=(
+            "Whether to run the independent fact-checker — an extra Claude call per "
+            "question that judges factual correctness regardless of context. Off for "
+            "cheap pilots; on for the final matrix."
+        ),
+    )
 
     # Optional overrides (None = use mode/difficulty defaults)
     top_k: Optional[int] = Field(None, description="Override KG top-k.")
@@ -142,6 +150,14 @@ class GenerationMetadata(BaseModel):
             "the field gives downstream analytics a column to detect any leak."
         ),
     )
+    clarity_heuristic: float = Field(
+        0.0,
+        description=(
+            "0.0..1.0 deterministic clarity / single-focus estimate. NOTE: unlike "
+            "figure_dependency_estimate and source_lexical_overlap (higher = worse), "
+            "here HIGHER = clearer / more focused; lower = over-stuffed, multi-clause."
+        ),
+    )
 
 
 class VerificationMetadata(BaseModel):
@@ -153,6 +169,43 @@ class VerificationMetadata(BaseModel):
     answerable_from_context: bool = False
     claimed_complexity_matches: bool = False
     claimed_reasoning_matches: bool = False
+    notes: str = ""
+
+
+class PedagogyMetadata(BaseModel):
+    """Pedagogical-quality judgement of a question (separate judge call).
+
+    Computed by lightrag/quiz/pedagogy.py with its own LLM call (Claude Sonnet),
+    judged from the question + reference answer only — the locked verifier prompt
+    is deliberately left untouched. 0 / "" mean unscored (mock or parse failure).
+    """
+
+    model: str = "claude-sonnet-4-6"
+    pedagogical_value: int = Field(
+        0, description="1 = trivia … 5 = foundational concept. 0 = unscored."
+    )
+    bloom_level: str = Field(
+        "",
+        description="Bloom's level: remember|understand|apply|analyze|evaluate|create. '' = unscored.",
+    )
+    answer_completeness: int = Field(
+        0, description="1 = does not address … 5 = fully addresses the question. 0 = unscored."
+    )
+    notes: str = ""
+
+
+class CorrectnessMetadata(BaseModel):
+    """Independent factual-correctness check (optional, separate judge call).
+
+    Run only when ``QuizGenerateRequest.run_correctness_check`` is true. A
+    fact-checker prompt judges whether the reference answer is factually correct
+    *independent* of whether it is grounded in the retrieved context. 0 = unscored.
+    """
+
+    model: str = "claude-sonnet-4-6"
+    answer_correctness: int = Field(
+        0, description="1 = definitely wrong … 5 = definitely correct. 0 = unscored."
+    )
     notes: str = ""
 
 
@@ -212,6 +265,8 @@ class QuizQuestionMetadata(BaseModel):
     retrieval: RetrievalMetadata
     generation: GenerationMetadata
     verification: Optional[VerificationMetadata] = None
+    pedagogy: Optional[PedagogyMetadata] = None
+    correctness: Optional[CorrectnessMetadata] = None
     human_rating: Optional[HumanRatingMetadata] = None
 
 

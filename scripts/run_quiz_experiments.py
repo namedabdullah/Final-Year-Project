@@ -116,6 +116,8 @@ def summarize(resp: dict) -> dict:
     qs = resp.get("questions", []) or []
     req = resp.get("request", {}) or {}
     ver = [q.get("verification") for q in qs if q.get("verification")]
+    ped = [q.get("pedagogy") for q in qs if q.get("pedagogy")]
+    corr = [q.get("correctness") for q in qs if q.get("correctness")]
     contribs = resp.get("file_contributions", []) or []
     return {
         "mode": req.get("mode"),
@@ -131,8 +133,13 @@ def summarize(resp: dict) -> dict:
             for q in qs if q.get("verification")
         ]),
         "reasoning_types": dict(Counter(v.get("actual_reasoning_type") for v in ver)),
+        "pedagogical_value_mean": _mean([p.get("pedagogical_value") for p in ped if p.get("pedagogical_value")]),
+        "bloom_distribution": dict(Counter(p.get("bloom_level") for p in ped if p.get("bloom_level"))),
+        "answer_completeness_mean": _mean([p.get("answer_completeness") for p in ped if p.get("answer_completeness")]),
+        "answer_correctness_mean": _mean([c.get("answer_correctness") for c in corr if c.get("answer_correctness")]),
         "mean_figure_dependency": _mean([q.get("generation", {}).get("figure_dependency_estimate") for q in qs]),
         "mean_lexical_overlap": _mean([q.get("generation", {}).get("source_lexical_overlap") for q in qs]),
+        "mean_clarity": _mean([q.get("generation", {}).get("clarity_heuristic") for q in qs]),
         "diversity": resp.get("diversity") or {},
         "files_total": len(contribs),
         "files_contributed": sum(1 for c in contribs if c.get("seed_count", 0) > 0),
@@ -149,6 +156,7 @@ _COLS = [
     ("answerable_rate", "ans", 6),
     ("complexity_match_rate", "cplx", 6),
     ("reasoning_match_rate", "rsn", 6),
+    ("pedagogical_value_mean", "pedval", 7),
     ("mean_figure_dependency", "figdep", 7),
     ("files_contributed", "files+", 7),
 ]
@@ -241,8 +249,9 @@ def task_compare(args) -> int:
     b = {(_k(s)): s for s in json.loads(Path(args.b).read_text(encoding="utf-8")) if "error" not in s}
     metrics = [
         "answerable_rate", "complexity_match_rate", "reasoning_match_rate",
-        "reasoning_appropriate_rate",
-        "mean_figure_dependency", "mean_lexical_overlap",
+        "reasoning_appropriate_rate", "pedagogical_value_mean",
+        "answer_completeness_mean", "answer_correctness_mean",
+        "mean_figure_dependency", "mean_lexical_overlap", "mean_clarity",
     ]
     name_a = Path(args.a).parent.name or "A"
     name_b = Path(args.b).parent.name or "B"

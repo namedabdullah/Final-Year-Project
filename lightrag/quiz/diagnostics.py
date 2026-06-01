@@ -119,6 +119,67 @@ def source_lexical_overlap(question: str, top_chunk_text: str) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Question clarity / single-focus estimate
+# ---------------------------------------------------------------------------
+
+# Connectives whose repeated presence signals a multi-part, over-stuffed
+# question (the "hard" questions pile on clauses like "… and what factors must
+# be considered, particularly when …"). Coarse on purpose — a flag, not a parser.
+_CLARITY_CONNECTIVES = (
+    " and ",
+    " or ",
+    " particularly",
+    " considering",
+    " while ",
+    " whereas ",
+    " also ",
+    " as well as ",
+    " in terms of ",
+)
+
+
+def estimate_clarity(question: str) -> float:
+    """Heuristic clarity / single-focus score in ``[0, 1]``.
+
+    IMPORTANT — the direction is the OPPOSITE of the other two diagnostics in
+    this module: here **higher = clearer / more single-focus**; lower =
+    over-stuffed. (``estimate_figure_dependency`` and ``source_lexical_overlap``
+    are higher = worse.)
+
+    Starts at 1.0 and subtracts coarse penalties for over-stuffing:
+      - long question text (> 140 chars): up to -0.3
+      - more than one sentence: -0.2
+      - each multi-clause connective beyond the first: -0.1 (capped at -0.3)
+    Floors at 0.0. An empty question returns 0.0 (no question = not clear).
+
+    Thresholds are intentionally coarse and tunable — a review flag, not a
+    grammar classifier.
+    """
+    q = (question or "").strip()
+    if not q:
+        return 0.0
+
+    score = 1.0
+
+    # Length: questions over ~140 chars are usually multi-part. Ramp to -0.3.
+    if len(q) > 140:
+        score -= min(0.3, (len(q) - 140) / 400.0)
+
+    # Sentence count: a single focused question is one sentence.
+    sentences = [s for s in re.split(r"[.?!]+", q) if s.strip()]
+    if len(sentences) > 1:
+        score -= 0.2
+
+    # Multi-clause connectives: the first is fine; pile-ons cost.
+    low = f" {q.lower()} "
+    connectives = sum(low.count(c) for c in _CLARITY_CONNECTIVES)
+    if connectives > 1:
+        score -= min(0.3, (connectives - 1) * 0.1)
+
+    return round(max(0.0, score), 4)
+
+
+# ---------------------------------------------------------------------------
 # Quiz-level diversity instrument (quality-plan.md §8.1)
 # ---------------------------------------------------------------------------
 
@@ -197,6 +258,7 @@ def reasoning_is_appropriate(difficulty: str, actual_reasoning_type: str) -> boo
 __all__ = [
     "estimate_figure_dependency",
     "source_lexical_overlap",
+    "estimate_clarity",
     "pairwise_cosine_stats",
     "reasoning_is_appropriate",
     "REASONING_TIER",

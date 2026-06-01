@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List
 
 from lightrag.quiz.diagnostics import (
+    estimate_clarity,
     estimate_figure_dependency,
     pairwise_cosine_stats,
     source_lexical_overlap,
@@ -43,6 +44,7 @@ from lightrag.quiz.schemas import (
     QuizQuestionMetadata,
     RetrievalMetadata,
 )
+from lightrag.quiz.pedagogy import judge_correctness, judge_pedagogy
 from lightrag.quiz.seeds import sample_seeds
 from lightrag.quiz.storage import load_quiz, save_quiz, save_reverified_quiz
 from lightrag.quiz.verification import verify_question
@@ -177,6 +179,7 @@ async def _generate_one(
         top_chunk_text = ctx.chunks[0].get("content", ctx.chunks[0].get("text", ""))
     fig_dep = estimate_figure_dependency(question, reference_answer)
     lex_overlap = source_lexical_overlap(question, top_chunk_text)
+    clarity = estimate_clarity(question)
     chunk_count = len(ctx.chunks) if ctx.chunks else 0
 
     generation_meta = GenerationMetadata(
@@ -186,19 +189,41 @@ async def _generate_one(
         reference_answer=reference_answer,
         figure_dependency_estimate=fig_dep,
         source_lexical_overlap=lex_overlap,
+        clarity_heuristic=clarity,
         retrieved_chunk_count=chunk_count,
     )
 
-    # 4. Verify (optional)
-    verification_meta = None
+    # 4. Evaluate (optional). The verifier (the locked instrument), the pedagogy
+    # judge, and the opt-in correctness fact-check are independent LLM calls — run
+    # whichever are enabled concurrently to keep per-question latency low.
+    verification_meta = pedagogy_meta = correctness_meta = None
+    jobs = []
     if req.run_verification:
-        verification_meta = await verify_question(
-            question=question,
-            reference_answer=reference_answer,
-            context=ctx,
-            claimed_complexity=claimed_complexity,
-            claimed_reasoning_type=claimed_reasoning,
-        )
+        jobs.append((
+            "verification",
+            verify_question(
+                question=question,
+                reference_answer=reference_answer,
+                context=ctx,
+                claimed_complexity=claimed_complexity,
+                claimed_reasoning_type=claimed_reasoning,
+            ),
+        ))
+        jobs.append((
+            "pedagogy",
+            judge_pedagogy(question=question, reference_answer=reference_answer),
+        ))
+    if req.run_correctness_check:
+        jobs.append((
+            "correctness",
+            judge_correctness(question=question, reference_answer=reference_answer),
+        ))
+    if jobs:
+        done = await asyncio.gather(*(coro for _, coro in jobs))
+        results = dict(zip((name for name, _ in jobs), done))
+        verification_meta = results.get("verification")
+        pedagogy_meta = results.get("pedagogy")
+        correctness_meta = results.get("correctness")
 
     return QuizQuestionMetadata(
         question_id=str(uuid.uuid4()),
@@ -209,6 +234,8 @@ async def _generate_one(
         retrieval=retrieval_meta,
         generation=generation_meta,
         verification=verification_meta,
+        pedagogy=pedagogy_meta,
+        correctness=correctness_meta,
     )
 
 
