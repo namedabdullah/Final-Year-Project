@@ -267,6 +267,99 @@ Config: `QUIZ_LLM_RERANK`, `QUIZ_LLM_TOPN`, `QUIZ_SEED_LLM_MODEL`,
 
 ---
 
+## I. Step 1c implemented (2026-05-31) — course-metadata / title-slide seed filter
+
+Added after the **first live smoke run** (mix + naive, medium, 10 Q, on
+Scheduling + Process-Mgmt + Memory-Mgmt). The run passed every hard check
+(v7 anti-fabrication held — zero ungrounded specifics; Step 2 ran end-to-end;
+contribution 4/4/2 with the cap binding; diversity mean ≈ 0.42) but surfaced a
+concrete weak-seed leak the LLM gate could not catch:
+
+- **Naive picked the course-title boilerplate 3/10 times** — "CSC 323 -
+  Principles of Operating Systems / Instructor: Dr. … / Lecture# NN", the header
+  that opens every lecture deck (chunk-000). It is real prose, so it cleared the
+  anchor + token floors; and gpt-4o-mini scored it mid-pack (LLM ranks 10/28/45),
+  not ≤ 2, so the soft gate (`QUIZ_LLM_GATE_SCORE=2.0`) did not exclude it. The
+  cache histogram confirmed *why*: 35 concepts scored ≤ 2 (gated), but **40 sit
+  in the 3–5 "low-value" band that survives the gate** — the leak lives there.
+
+**Fix** (deterministic, explainable, symmetric — the plan-preferred kind):
+`artifacts.is_course_metadata(text)` matches high-precision course-identity
+markers (course code `[A-Z]{2,4}\d{3}`, an "Instructor:" line, a "Lecture #N"
+header) that never occur in concept prose. Wired in two places:
+- **naive** (`scoring.score_naive`): a chunk whose content *lead* is metadata
+  fails the floor, behind `QUIZ_NAIVE_EXCLUDE_METADATA` (default true).
+- **mix** (`seeds.py` entity listers): metadata entities (e.g. "CSC 323") are
+  dropped from the candidate pool alongside the existing artifact / figure /
+  instance-label filters.
+
+Seed selection only — retrieval still spans these chunks, so naive stays naive.
+Unit-tested: an `is_course_metadata` truth table (markers vs real concepts like
+"Operating System" / "CPU Scheduling" which must be KEPT) plus a `score_naive`
+floor test using the *full-length* header slide that clears the token floor —
+the case the prior short-stub test did not exercise.
+
+**Residual / still open (P2):**
+- **Instructor-name entities** ("M. Hasan Jamal" as a Person node) are not caught
+  by the marker regex; they rely on the Step-2 LLM gate (rubric scores
+  author/instructor metadata = 1). Confirm in the re-run.
+- **The 3–5 LLM band** is the remaining soft-seed source. Prefer this
+  deterministic filter over raising `QUIZ_LLM_GATE_SCORE` (which risks
+  over-pruning real-but-modest 4–5 concepts); revisit the gate only if leaks
+  persist after this filter.
+- **`is_course_metadata` is OS-corpus-tuned**; confirm it generalises before
+  reuse on another corpus (same caveat as the Step-2 importance rubric).
+
+## J. Reasoning-match reframed to depth tiers (2026-06) — verifier metric, not the verifier
+
+After switching the verifier to the intended **Claude Sonnet** (it had silently
+fallen back to gpt-4o-mini self-grading), medium/hard runs across both arms gave
+trustworthy numbers — and exposed that **exact reasoning-type matching is too
+brittle**. Hard mix questions scored **0/10 on exact `causal`**, yet all ten were
+`causal`/`inferential`/`analytical` — i.e. genuinely higher-order; they only
+"failed" because the hardcoded claim is the single label `causal`.
+
+**Fix (aggregation-layer only — the verifier is untouched):** score reasoning by
+**depth tier**, not exact type. The verifier still classifies `actual_reasoning_type`
+faithfully; we re-interpret it via `diagnostics.reasoning_is_appropriate(difficulty,
+actual)`:
+
+| Tier | Types | Expected for |
+|---|---|---|
+| 1 recall | factual | easy |
+| 2 relational | comparative | medium |
+| 3 higher-order | causal / inferential / analytical | hard |
+
+A question is "appropriate" when its actual tier == the tier expected for its
+difficulty. Because easy/medium tiers are **singletons**, this changes *only*
+hard (it now accepts the whole tier-3 set). Surfaced as a new
+`reasoning_appropriate_rate` in `matrix.summarize_quiz` and the experiment
+runner, **alongside** the original exact `reasoning_match_rate` (kept for
+transparency) plus a `reasoning_types` distribution.
+
+**Key properties / why this is defensible:**
+- **No re-runs needed** — recomputed from the already-stored `actual_reasoning_type`;
+  applies retroactively to every Claude-verified quiz.
+- **Instrument unchanged** — the locked verifier prompt and its raw outputs are
+  not modified; this is a reporting/metric decision, documented here.
+- **Both numbers reported** — exact-match (strict) and tier-appropriate (fair),
+  so the write-up can show "exact 0.0 → depth-appropriate 1.0 on hard."
+
+**Residual / still open:**
+- **Complexity-match reframe NOT done** (deliberately scoped out for now). Mix
+  complexity is healthy under Claude (0.8-0.9); naive *hard* complexity is 0.0
+  (questions claim 3 pieces but need 1-2) — partly a real finding (naive "hard"
+  isn't genuinely multi-piece), partly the retrieval-depth-vs-pieces-needed
+  definition gap. Revisit as an "appropriateness" reframe if needed. **P2**
+- **Hard answerability ~0.7-0.8** under Claude reflects genuine, modest
+  over-reach (the generator asserts a few claims beyond the context). Fix is
+  upstream (tighter hard-prompt grounding / mix context pruning), not the
+  verifier. **P2**
+- The depth-tier mapping is corpus-agnostic but the *claimed* types per
+  difficulty still live in `generation.REASONING_TYPE`; if a future prompt
+  changes the intended reasoning per difficulty, update `EXPECTED_REASONING_TIER`
+  to match.
+
 ## Recommended next steps (in order)
 
 1. **(P1)** Live smoke run, both arms — confirm the new scorer works on the real

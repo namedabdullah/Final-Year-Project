@@ -378,6 +378,34 @@ def test_naive_floor_rejects_anchor_and_title_slides():
     assert floor["prose"] is True
 
 
+def test_naive_floor_rejects_full_course_header_slide():
+    # Step 1c: the REAL leak — chunk-000 of every lecture opens with the course
+    # header AND continues into real content, so it is long enough to clear the
+    # token floor (unlike the short stub above, which the token floor caught).
+    # is_course_metadata must reject it on the content lead.
+    chunks = [
+        {"id": "title", "full_doc_id": "D1",
+         "content": ("1\n\n# CSC 323 - Principles of Operating Systems\n"
+                     "Instructor: Dr. M. Hasan Jamal\nLecture# 01: Introduction\n\n"
+                     "# What is an Operating System? A program that acts as an "
+                     "intermediary between a user and the computer hardware, "
+                     "managing resources and providing services to applications.")},
+        {"id": "prose", "full_doc_id": "D1",
+         "content": ("Demand paging loads a page into memory only when it is "
+                     "referenced, which reduces the resident footprint of a process.")},
+    ]
+    rows = scoring.score_naive(chunks, _fs)
+    by_key = {r["key"]: r for r in rows}
+    # The header slide clears the token floor (it has plenty of tokens) but is
+    # rejected purely because its lead is course metadata.
+    assert by_key["title"]["is_meta"] is True
+    assert by_key["title"]["n_tokens"] >= 5
+    assert by_key["title"]["meets_floor"] is False
+    # Genuine teachable prose is untouched.
+    assert by_key["prose"]["is_meta"] is False
+    assert by_key["prose"]["meets_floor"] is True
+
+
 # ---------------------------------------------------------------------------
 # Deterministic RNG (reproducibility — quality-plan.md §7.4)
 # ---------------------------------------------------------------------------

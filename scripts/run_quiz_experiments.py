@@ -51,11 +51,26 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 DEFAULT_URL = os.environ.get("QUIZ_API_URL", "http://localhost:9621")
 DEFAULT_KEY = os.environ.get("LIGHTRAG_API_KEY") or os.environ.get("QUIZ_API_KEY") or ""
 ARM_FOR_MODE = {"mix": "graph", "naive": "naive"}
+
+# Reasoning-depth tiers -- keep in sync with lightrag/quiz/diagnostics.py
+# (reasoning_is_appropriate). The three higher-order types collapse to one
+# 'deep' tier (3), so a hard question the verifier labels analytical/inferential
+# (not exactly the claimed 'causal') still counts as appropriately-reasoned.
+# easy/medium tiers are singletons, so this only changes 'hard'.
+_REASONING_TIER = {"factual": 1, "comparative": 2, "causal": 3, "inferential": 3, "analytical": 3}
+_EXPECTED_TIER = {"easy": 1, "medium": 2, "hard": 3}
+
+
+def _reasoning_ok(difficulty, actual):
+    exp = _EXPECTED_TIER.get((difficulty or "").strip().lower())
+    got = _REASONING_TIER.get((actual or "").strip().lower())
+    return exp is not None and got is not None and got == exp
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +126,11 @@ def summarize(resp: dict) -> dict:
         "answerable_rate": _rate([bool(v.get("answerable_from_context")) for v in ver]),
         "complexity_match_rate": _rate([bool(v.get("claimed_complexity_matches")) for v in ver]),
         "reasoning_match_rate": _rate([bool(v.get("claimed_reasoning_matches")) for v in ver]),
+        "reasoning_appropriate_rate": _rate([
+            _reasoning_ok(q.get("difficulty"), (q.get("verification") or {}).get("actual_reasoning_type"))
+            for q in qs if q.get("verification")
+        ]),
+        "reasoning_types": dict(Counter(v.get("actual_reasoning_type") for v in ver)),
         "mean_figure_dependency": _mean([q.get("generation", {}).get("figure_dependency_estimate") for q in qs]),
         "mean_lexical_overlap": _mean([q.get("generation", {}).get("source_lexical_overlap") for q in qs]),
         "diversity": resp.get("diversity") or {},
@@ -221,6 +241,7 @@ def task_compare(args) -> int:
     b = {(_k(s)): s for s in json.loads(Path(args.b).read_text(encoding="utf-8")) if "error" not in s}
     metrics = [
         "answerable_rate", "complexity_match_rate", "reasoning_match_rate",
+        "reasoning_appropriate_rate",
         "mean_figure_dependency", "mean_lexical_overlap",
     ]
     name_a = Path(args.a).parent.name or "A"

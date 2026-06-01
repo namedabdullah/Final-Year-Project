@@ -16,9 +16,14 @@ from __future__ import annotations
 
 import pytest
 
-from lightrag.quiz.artifacts import is_artifact_id, redact_instance_labels
+from lightrag.quiz.artifacts import (
+    is_artifact_id,
+    is_course_metadata,
+    redact_instance_labels,
+)
 from lightrag.quiz.diagnostics import (
     estimate_figure_dependency,
+    reasoning_is_appropriate,
     source_lexical_overlap,
 )
 
@@ -46,6 +51,34 @@ _HEX32 = "c570c018fd8c6a90b42b9fd0b61c2443"
 )
 def test_is_artifact_id(name: str, expected: bool) -> None:
     assert is_artifact_id(name) is expected
+
+
+# ---------------------------------------------------------------------------
+# is_course_metadata (Step 1c — course-title-slide seed filter)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # Course-title-slide boilerplate that leaked into naive seeds.
+        ("1\n\n# CSC 323 - Principles of Operating Systems\nInstructor: Dr. M. Hasan Jamal", True),
+        ("Instructor: Dr. M. Hasan Jamal", True),     # instructor line
+        ("Lecture# 05: CPU Scheduling", True),         # lecture header (with #)
+        ("Lecture 7", True),                           # lecture header (no #)
+        ("CSC 323", True),                             # course code (spaced)
+        ("CS101", True),                               # course code (joined)
+        # Real concepts / prose — never flagged (high-precision keep).
+        ("Operating System", False),
+        ("CPU Scheduling", False),                     # the lecture *topic*, not its header
+        ("Bounded-Buffer Problem", False),
+        ("Memory Management", False),
+        ("A page fault occurs when a referenced page is not resident in memory.", False),
+        ("", False),
+    ],
+)
+def test_is_course_metadata(text: str, expected: bool) -> None:
+    assert is_course_metadata(text) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -144,3 +177,35 @@ def test_overlap_partial() -> None:
     # Shared content tokens: semaphore, prevent(s), race, conditions → 4 in
     # common. Score should be moderate (0.3-0.7), not 1.0 or 0.0.
     assert 0.2 < score < 0.8
+
+
+# ---------------------------------------------------------------------------
+# reasoning_is_appropriate (depth-tier reasoning-match reframe)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "difficulty, actual, expected",
+    [
+        # HARD accepts the whole tier-3 set (the point of the reframe).
+        ("hard", "causal", True),
+        ("hard", "analytical", True),
+        ("hard", "inferential", True),
+        ("hard", "comparative", False),   # too shallow for hard
+        ("hard", "factual", False),
+        # MEDIUM is a singleton tier (comparative) -> identical to exact match.
+        ("medium", "comparative", True),
+        ("medium", "causal", False),      # deeper than medium's tier
+        ("medium", "factual", False),     # too shallow
+        # EASY is a singleton tier (factual).
+        ("easy", "factual", True),
+        ("easy", "comparative", False),
+        # Robustness: unknown / empty inputs are conservative (False).
+        ("hard", "", False),
+        ("hard", "unknown-type", False),
+        ("", "causal", False),
+        ("HARD", "ANALYTICAL", True),     # case-insensitive
+    ],
+)
+def test_reasoning_is_appropriate(difficulty: str, actual: str, expected: bool) -> None:
+    assert reasoning_is_appropriate(difficulty, actual) is expected

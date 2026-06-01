@@ -31,6 +31,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Set
 import numpy as np
 
 from lightrag.constants import GRAPH_FIELD_SEP
+from lightrag.quiz.artifacts import is_course_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,17 @@ _MIN_CHUNK_DENSITY = float(os.environ.get("QUIZ_MIN_CHUNK_DENSITY", "0.0"))
 # itself a reportable finding.
 _NAIVE_EXCLUDE_ANCHORS = (
     os.environ.get("QUIZ_NAIVE_EXCLUDE_ANCHORS", "true").lower() == "true"
+)
+# Step 1c (suggestions.md I; from the 2026-05-31 smoke run): exclude course-
+# title-slide / administrative-metadata chunks from the naive *seed* pool. The
+# lecture-deck header ("CSC 323 - Principles of Operating Systems / Instructor:
+# ... / Lecture# NN") is real prose (clears the anchor + token floors) but a
+# worthless seed, and it leaked into 3/10 naive seeds. Seed selection only —
+# retrieval still spans these chunks, so the arm stays methodologically "naive".
+# Symmetric with the mix-arm entity filter in seeds.py (``is_course_metadata``
+# also drops metadata entities there).
+_NAIVE_EXCLUDE_METADATA = (
+    os.environ.get("QUIZ_NAIVE_EXCLUDE_METADATA", "true").lower() == "true"
 )
 # Minimum content-token count (alphabetic 2+ char tokens) for a chunk to be a
 # seed — rejects the shortest title/divider stubs ("CSC 323 … Instructor:").
@@ -469,6 +481,10 @@ def score_naive(
         doc_id = c.get("full_doc_id", "") or ""
 
         is_anchor = bool(_ANCHOR_RE.match(content)) or _is_embedded_anchor(content)
+        # Course-metadata is judged on the content *lead* — the seed is the
+        # chunk's first sentence, so a metadata header at the top poisons the
+        # seed even when teachable prose follows later in the chunk.
+        is_meta = is_course_metadata(content[:200])
         tokens = _TOKEN_RE.findall(content)
         n_tokens = len(tokens)
         ntok = max(1, n_tokens)
@@ -483,6 +499,7 @@ def score_naive(
                 "doc_id": doc_id,
                 "dedup_key": cid,
                 "is_anchor": is_anchor,
+                "is_meta": is_meta,
                 "density": density,
                 "n_tokens": n_tokens,
                 "signals": {
@@ -506,6 +523,7 @@ def score_naive(
     for r in rows:
         r["meets_floor"] = (
             (not (r["is_anchor"] and _NAIVE_EXCLUDE_ANCHORS))
+            and (not (r["is_meta"] and _NAIVE_EXCLUDE_METADATA))
             and (r["n_tokens"] >= _MIN_CHUNK_TOKENS)
             and (r["density"] >= _MIN_CHUNK_DENSITY)
         )

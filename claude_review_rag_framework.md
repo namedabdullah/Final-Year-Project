@@ -395,6 +395,20 @@ Prompts should NOT solely define difficulty.
 
 # Easy Prompt
 
+> **Revision v7 (2026-05-31, follow-up to v6)**: Added an anti-fabrication
+> grounding rule (`NO FABRICATED SPECIFICS`) to the Avoid block after the
+> smoke-run-#4 verifier pass (`quiz-b363f421`, mix, medium) flagged 3/10
+> questions `answerable_from_context=false`. Q3 and Q9 cited specific
+> numeric values ("30 seconds and another 40 seconds", "arriving at 0
+> seconds and another at 1 second") that originate in burst/arrival-time
+> TABLES absent from the retrieved prose — `source_lexical_overlap` was
+> 0.09 and 0.02, confirming the reference answers were ungrounded
+> general-knowledge fills from GPT-4o-mini. The new rule forbids citing
+> exact quantitative values unless they appear verbatim in the context.
+> Arm-symmetric (shared Avoid block) but helps the mix arm most, whose
+> graph BFS bridges clean concept-seeds (`Running`, `Arrival Time`) into
+> table-derived entity neighbourhoods (`P1`, `Burst Time`, `Timeline`).
+>
 > **Revision v6 (2026-05-29, follow-up to v5)**: Positional reorder of
 > the Already-asked block (now AFTER context, with a Final-reminder
 > sentence) after `quiz-44fbc845-…` showed GPT-4o-mini ignoring the
@@ -478,6 +492,17 @@ Avoid (CRITICAL — ALL of the following are HARD rules):
   token, table cell, or figure label.
 - If the question would not make sense to a student without seeing the
   original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO FABRICATED SPECIFICS: Do NOT cite specific
+  quantitative values — exact times, durations, sizes, counts, memory
+  addresses, or numbered instances (e.g. "30 seconds", "arriving at 0
+  seconds", "4 KB", "P2") — UNLESS that exact value appears verbatim in
+  the Context above. Such numbers usually originate in a figure or table
+  that is NOT part of the retrieved text, so a question or
+  reference_answer that cites them cannot be grounded. Ask about the
+  underlying relationship in conceptual terms instead. Example of
+  FAILURE: "How does a process requiring 30 seconds compare to one
+  requiring 40 seconds?" Example of SUCCESS: "How does a process's burst
+  time influence the order in which it is scheduled?"
 - ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
   section below is non-empty, your question must NOT cover the same
   concept, phrasing, or answer as any item in that list.
@@ -499,6 +524,11 @@ any prior question's concept or phrasing, rewrite it before returning JSON.
 
 # Medium Prompt
 
+> **Revision v7 (2026-05-31, follow-up to v6)**: Same anti-fabrication
+> `NO FABRICATED SPECIFICS` rule added as Easy v7 — directly targets the
+> medium-arm failure that motivated it (`quiz-b363f421` Q3/Q9 cited
+> table-derived second-values absent from the retrieved prose).
+>
 > **Revision v6 (2026-05-29, follow-up to v5)**: Same positional reorder
 > as Easy v6 — Already-asked block moved AFTER context with a
 > Final-reminder sentence.
@@ -552,6 +582,17 @@ Avoid (CRITICAL — ALL of the following are HARD rules):
   token, table cell, or figure label.
 - If the question would not make sense to a student without seeing the
   original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO FABRICATED SPECIFICS: Do NOT cite specific
+  quantitative values — exact times, durations, sizes, counts, memory
+  addresses, or numbered instances (e.g. "30 seconds", "arriving at 0
+  seconds", "4 KB", "P2") — UNLESS that exact value appears verbatim in
+  the Context above. Such numbers usually originate in a figure or table
+  that is NOT part of the retrieved text, so a question or
+  reference_answer that cites them cannot be grounded. Ask about the
+  underlying relationship in conceptual terms instead. Example of
+  FAILURE: "How does a process requiring 30 seconds compare to one
+  requiring 40 seconds?" Example of SUCCESS: "How does a process's burst
+  time influence the order in which it is scheduled?"
 - ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
   section below is non-empty, your question must NOT cover the same
   concept, phrasing, or answer as any item in that list.
@@ -573,6 +614,9 @@ any prior question's concept or phrasing, rewrite it before returning JSON.
 
 # Hard Prompt
 
+> **Revision v7 (2026-05-31, follow-up to v6)**: Same anti-fabrication
+> `NO FABRICATED SPECIFICS` rule added as Easy v7.
+>
 > **Revision v4 (2026-05-28, same-day follow-up to v3)**: Same three
 > refinements applied as Easy v4.
 >
@@ -618,6 +662,17 @@ Avoid (CRITICAL — ALL of the following are HARD rules):
   token, table cell, or figure label.
 - If the question would not make sense to a student without seeing the
   original figure, REWRITE it so it does.
+- ABSOLUTE RULE — NO FABRICATED SPECIFICS: Do NOT cite specific
+  quantitative values — exact times, durations, sizes, counts, memory
+  addresses, or numbered instances (e.g. "30 seconds", "arriving at 0
+  seconds", "4 KB", "P2") — UNLESS that exact value appears verbatim in
+  the Context above. Such numbers usually originate in a figure or table
+  that is NOT part of the retrieved text, so a question or
+  reference_answer that cites them cannot be grounded. Ask about the
+  underlying relationship in conceptual terms instead. Example of
+  FAILURE: "How does a process requiring 30 seconds compare to one
+  requiring 40 seconds?" Example of SUCCESS: "How does a process's burst
+  time influence the order in which it is scheduled?"
 - ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the "Already asked"
   section below is non-empty, your question must NOT cover the same
   concept, phrasing, or answer as any item in that list.

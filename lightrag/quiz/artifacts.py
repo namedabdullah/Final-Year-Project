@@ -214,10 +214,61 @@ def is_figure_label_entity(name: str) -> bool:
     return bool(_FIGURE_LABEL_RE.search(name or ""))
 
 
+# ---------------------------------------------------------------------------
+# Course-metadata / title-slide detection
+# ---------------------------------------------------------------------------
+
+# Title-slide boilerplate that opens every lecture deck in this corpus, e.g.
+# "CSC 323 - Principles of Operating Systems / Instructor: Dr. M. Hasan Jamal /
+# Lecture# 05: CPU Scheduling". This is valid prose (it clears the anchor and
+# token floors) yet is worthless as a quiz seed, and it leaked into 3/10 naive
+# seeds in the 2026-05-31 smoke run. Detected by high-precision metadata markers
+# that never occur in concept prose: a course code, an "Instructor:" line, or a
+# "Lecture #N" header. Deliberately does NOT match the bare concept
+# "Operating System(s)" — only the surrounding course-identity markers — so a
+# legitimate concept seed is never dropped (same keep-don't-drop precision
+# principle as ``is_instance_label_entity``).
+_COURSE_METADATA_RE = re.compile(
+    r"\b[Ii]nstructor\s*:"          # "Instructor:" line
+    r"|\b[Ll]ecture\s*#?\s*\d"       # "Lecture# 05" / "Lecture 5"
+    r"|\b[A-Z]{2,4}[-\s]?\d{3}\b"    # course code, e.g. "CSC 323" / "CS101"
+)
+
+
+def is_course_metadata(text: str) -> bool:
+    """True if ``text`` is course-title-slide / administrative metadata.
+
+    Targets the lecture-deck header boilerplate (course code, instructor line,
+    "Lecture #N" title) that is valid prose but worthless as a quiz seed. Used
+    to drop such chunks from the naive seed pool (checked on the content lead)
+    and such entities from the mix pool — symmetric across both arms.
+
+    High-precision by design: only the course-identity *markers* match, so the
+    underlying concept ("Operating System", "CPU Scheduling") is never dropped.
+
+    Examples
+    --------
+    >>> is_course_metadata("1  # CSC 323 - Principles of Operating Systems")
+    True
+    >>> is_course_metadata("Instructor: Dr. M. Hasan Jamal")
+    True
+    >>> is_course_metadata("Lecture# 05: CPU Scheduling")
+    True
+    >>> is_course_metadata("Operating System")
+    False
+    >>> is_course_metadata("CPU Scheduling")
+    False
+    >>> is_course_metadata("A page fault occurs when a page is not resident.")
+    False
+    """
+    return bool(_COURSE_METADATA_RE.search(text or ""))
+
+
 __all__ = [
     "is_artifact_id",
     "redact_instance_labels",
     "is_instance_label_entity",
     "normalize_concept_name",
     "is_figure_label_entity",
+    "is_course_metadata",
 ]

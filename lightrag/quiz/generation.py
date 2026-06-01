@@ -35,15 +35,16 @@ REASONING_TYPE = {
 }
 
 PROMPT_TEMPLATE_IDS = {
-    "easy": "easy_v6",
-    "medium": "medium_v6",
-    "hard": "hard_v6",
+    "easy": "easy_v7",
+    "medium": "medium_v7",
+    "hard": "hard_v7",
 }
 
 # Shared "Avoid" block — appended to every difficulty's template. Concept-
 # oriented production constraints: refuses diagram-label questions, table-cell
-# extraction, and figure-dependent shapes. Records the v2 revision (see
-# claude_review_rag_framework.md §Easy/Medium/Hard Prompts).
+# extraction, figure-dependent shapes, and fabricated numeric specifics.
+# Records the v2 revision (see claude_review_rag_framework.md §Easy/Medium/Hard
+# Prompts).
 _AVOID_BLOCK = (
     "Avoid (CRITICAL — ALL of the following are HARD rules):\n"
     # Rule 1: placeholders. Moved to top in R4 because LLMs anchor on early
@@ -78,6 +79,25 @@ _AVOID_BLOCK = (
     "token, table cell, or figure label.\n"
     "- If the question would not make sense to a student without seeing the "
     "original figure, REWRITE it so it does.\n"
+    # Rule (v7): anti-fabrication grounding rule. Added after quiz-b363f421
+    # (mix, medium): Q3/Q9 cited specific numeric values ("30 seconds",
+    # "arriving at 0 seconds") drawn from burst/arrival-time TABLES that were
+    # not present in the retrieved prose, so the verifier flagged them
+    # answerable_from_context=False (source_lexical_overlap 0.02-0.09). The
+    # generator filled the gap from GPT-4o-mini's general scheduling knowledge.
+    # Symmetric across arms — lives in the shared block, helps mix most because
+    # its graph BFS reaches table-derived entities (P1, Burst Time, Timeline).
+    "- ABSOLUTE RULE — NO FABRICATED SPECIFICS: Do NOT cite specific "
+    "quantitative values — exact times, durations, sizes, counts, memory "
+    "addresses, or numbered instances (e.g. \"30 seconds\", \"arriving at 0 "
+    "seconds\", \"4 KB\", \"P2\") — UNLESS that exact value appears verbatim in "
+    "the Context above. Such numbers usually originate in a figure or table "
+    "that is NOT part of the retrieved text, so a question or reference_answer "
+    "that cites them cannot be grounded in the context. Ask about the "
+    "underlying relationship in conceptual terms instead. Example of FAILURE: "
+    "\"How does a process requiring 30 seconds compare to one requiring 40 "
+    "seconds?\" Example of SUCCESS: \"How does a process's burst time influence "
+    "the order in which it is scheduled?\"\n"
 )
 
 # Full user-turn prompts from claude_review_rag_framework.md §Easy/Medium/Hard
@@ -131,6 +151,20 @@ _AVOID_BLOCK = (
 #       ``doc_status.chunks_list`` instead of the broken
 #       ``chunks_vdb.query("the")``, which was the upstream cause of
 #       ``topic_N`` seeds dominating the naive arm.
+# v7 (2026-05-31): anti-fabrication grounding rule added to the shared Avoid
+#   block after the smoke-run-#4 verifier pass (quiz-b363f421, mix, medium)
+#   showed answerable_from_context=False on 3/10 questions. Q3 and Q9 cited
+#   specific numeric values ("30 seconds and another 40 seconds", "arriving at
+#   0 seconds and another at 1 second") that originate in burst/arrival-time
+#   TABLES absent from the retrieved prose — source_lexical_overlap was 0.02
+#   and 0.09 respectively, confirming the reference answers were ungrounded
+#   general-knowledge fills. The new ABSOLUTE RULE — NO FABRICATED SPECIFICS
+#   forbids citing exact quantitative values unless they appear verbatim in
+#   the context. Arm-symmetric (shared block), but helps the mix arm most
+#   because its graph BFS bridges clean concept-seeds (``Running``, ``Arrival
+#   Time``) into table-derived entity neighbourhoods. No paired non-prompt
+#   change — the existing empty-retrieval guard does not fire here (retrieval
+#   returned 22-35 chunks; the defect was fabricated specifics, not emptiness).
 _PROMPT_TEMPLATES: dict[str, str] = {
     "easy": (
         "You are a quiz question generator for an academic study. Given the context below, "

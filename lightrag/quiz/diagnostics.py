@@ -152,8 +152,53 @@ def pairwise_cosine_stats(vectors: Sequence[Sequence[float]]) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Reasoning-depth tiers (reasoning-match reframe, 2026-06)
+# ---------------------------------------------------------------------------
+
+# The verifier classifies each question's actual_reasoning_type into one of five
+# types that form a natural *depth* ordering, collapsing to three tiers:
+#   tier 1 (recall)       : factual
+#   tier 2 (relational)   : comparative
+#   tier 3 (higher-order) : causal / inferential / analytical
+# Exact-type matching against a single claimed label is too brittle: a genuinely
+# hard question legitimately varies across the tier-3 types (a 2026-05 run scored
+# hard mix 0/10 on exact 'causal' yet all 10 were causal/inferential/analytical).
+# So we score reasoning by *tier*, not exact type. easy/medium tiers are
+# singletons, so this only relaxes 'hard'.
+REASONING_TIER = {
+    "factual": 1,
+    "comparative": 2,
+    "causal": 3,
+    "inferential": 3,
+    "analytical": 3,
+}
+EXPECTED_REASONING_TIER = {"easy": 1, "medium": 2, "hard": 3}
+
+
+def reasoning_is_appropriate(difficulty: str, actual_reasoning_type: str) -> bool:
+    """True if the verifier's reasoning type is the depth tier expected for ``difficulty``.
+
+    Replaces brittle exact-type matching: the three higher-order types
+    (causal / inferential / analytical) share tier 3, so a *hard* question the
+    verifier labels analytical or inferential — rather than exactly the claimed
+    ``causal`` — still counts as appropriately reasoned. ``easy``/``medium`` map
+    to singleton tiers, so their behaviour is identical to exact matching.
+
+    Unknown difficulty or reasoning type returns False (conservative).
+    """
+    exp = EXPECTED_REASONING_TIER.get((difficulty or "").strip().lower())
+    got = REASONING_TIER.get((actual_reasoning_type or "").strip().lower())
+    if exp is None or got is None:
+        return False
+    return got == exp
+
+
 __all__ = [
     "estimate_figure_dependency",
     "source_lexical_overlap",
     "pairwise_cosine_stats",
+    "reasoning_is_appropriate",
+    "REASONING_TIER",
+    "EXPECTED_REASONING_TIER",
 ]

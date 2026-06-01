@@ -21,8 +21,10 @@ verdict is written up from it.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from typing import List, Optional, Sequence
 
+from lightrag.quiz.diagnostics import reasoning_is_appropriate
 from lightrag.quiz.pipeline import generate_quiz
 from lightrag.quiz.schemas import QuizGenerateRequest, QuizGenerateResponse
 
@@ -57,6 +59,15 @@ def summarize_quiz(response: QuizGenerateResponse) -> dict:
         "answerable_rate": _rate([v.answerable_from_context for v in ver]),
         "complexity_match_rate": _rate([v.claimed_complexity_matches for v in ver]),
         "reasoning_match_rate": _rate([v.claimed_reasoning_matches for v in ver]),
+        # Depth-tier reasoning appropriateness: causal/inferential/analytical all
+        # count as 'deep' for hard, so legitimate within-tier variation isn't a
+        # miss (see diagnostics.reasoning_is_appropriate). The exact-match rate
+        # above is kept for transparency.
+        "reasoning_appropriate_rate": _rate([
+            reasoning_is_appropriate(q.difficulty, q.verification.actual_reasoning_type)
+            for q in qs if q.verification is not None
+        ]),
+        "reasoning_types": dict(Counter(v.actual_reasoning_type for v in ver)),
         # Diagnostic means (lower = more conceptual / less extractive).
         "mean_figure_dependency": _mean([q.generation.figure_dependency_estimate for q in qs]),
         "mean_lexical_overlap": _mean([q.generation.source_lexical_overlap for q in qs]),

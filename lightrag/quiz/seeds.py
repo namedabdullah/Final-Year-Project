@@ -31,6 +31,7 @@ from lightrag.constants import GRAPH_FIELD_SEP
 from lightrag.quiz import llm_importance, scoring
 from lightrag.quiz.artifacts import (
     is_artifact_id,
+    is_course_metadata,
     is_figure_label_entity,
     is_instance_label_entity,
 )
@@ -182,6 +183,7 @@ async def _list_entities_in_scope(
         and not is_artifact_id(n)
         and not is_figure_label_entity(n)
         and not is_instance_label_entity(n)
+        and not is_course_metadata(n)
     ]
     if not names:
         return []
@@ -254,6 +256,7 @@ async def _list_entities_unscoped(rag: "LightRAG", limit: int = 500) -> List[dic
         and not is_artifact_id(n)
         and not is_figure_label_entity(n)
         and not is_instance_label_entity(n)
+        and not is_course_metadata(n)
     ]
     if not names:
         return []
