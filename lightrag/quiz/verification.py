@@ -10,8 +10,10 @@ any call fails — callers always receive a valid VerificationMetadata object.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import re
 from typing import TYPE_CHECKING
 
 import json_repair
@@ -61,6 +63,72 @@ Return ONLY a valid JSON object with these exact keys:
   "claimed_reasoning_matches": <boolean>,
   "notes": "<one sentence rationale>"
 }"""
+
+
+# ---------------------------------------------------------------------------
+# OpenAI API helpers (shared by fallback path and GPT panel judge)
+# ---------------------------------------------------------------------------
+
+
+_JUDGE_RETRY_ATTEMPTS = int(os.environ.get("QUIZ_JUDGE_RETRY_ATTEMPTS", "4"))
+_JUDGE_RETRY_BASE_DELAY = float(os.environ.get("QUIZ_JUDGE_RETRY_BASE_DELAY", "2.0"))
+
+
+async def _openai_call_with_retry(coro_fn, model: str):
+    """Call an async OpenAI coroutine-factory with exponential backoff on 429s.
+
+    ``coro_fn`` is a zero-argument async callable that creates a fresh coroutine
+    each attempt (coroutines can only be awaited once).  Retries only on HTTP 429
+    (rate-limit) — all other errors propagate immediately so callers can mock them.
+    """
+    for attempt in range(_JUDGE_RETRY_ATTEMPTS):
+        try:
+            return await coro_fn()
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            is_rate_limit = "429" in msg or "rate_limit" in msg.lower() or "rate limit" in msg.lower()
+            if is_rate_limit and attempt < _JUDGE_RETRY_ATTEMPTS - 1:
+                delay = _JUDGE_RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "verification: OpenAI (%s) rate-limited — retrying in %.1fs "
+                    "(attempt %d/%d)",
+                    model, delay, attempt + 1, _JUDGE_RETRY_ATTEMPTS,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+
+def _is_reasoning_model(model: str) -> bool:
+    """Return True for models that reject the temperature parameter.
+
+    Covers o-series reasoning models (o1, o3, o4-mini …) and the gpt-5 family
+    (gpt-5-mini only supports temperature=1, its fixed default).
+    """
+    m = model.lower()
+    return bool(re.match(r"^o\d", m)) or m.startswith("gpt-5")
+
+
+# Reasoning models (o-series, gpt-5) spend max_completion_tokens on hidden
+# reasoning *before* any visible output; a small ceiling (512/1024) gets fully
+# consumed by reasoning → empty output → parse-fail → mock (seen in the Step-2
+# pilot: 13/14 GPT mocks were raw=''). Floor their budget so the JSON answer
+# survives. Tunable via QUIZ_REASONING_COMPLETION_TOKENS.
+_REASONING_MIN_COMPLETION_TOKENS = int(os.environ.get("QUIZ_REASONING_COMPLETION_TOKENS", "4096"))
+
+
+def _openai_chat_kwargs(model: str, max_tokens: int) -> dict:
+    """Build OpenAI chat.completions kwargs per the current API spec.
+
+    Uses ``max_completion_tokens`` (the current name; ``max_tokens`` is
+    deprecated for newer models). Standard chat models also get
+    ``temperature=0``. Reasoning models (o-series / gpt-5) reject ``temperature``
+    AND burn the completion budget on reasoning, so their budget is floored at
+    ``_REASONING_MIN_COMPLETION_TOKENS`` to leave room for the JSON output.
+    """
+    if _is_reasoning_model(model):
+        return {"max_completion_tokens": max(max_tokens, _REASONING_MIN_COMPLETION_TOKENS)}
+    return {"max_completion_tokens": max_tokens, "temperature": 0}
 
 
 # ---------------------------------------------------------------------------
@@ -188,19 +256,24 @@ async def _verify_with_openai(
         )
 
         client = AsyncOpenAI(api_key=openai_key)
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _VERIFIER_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=1024,
-        )
+        kwargs = _openai_chat_kwargs(model, 1024)
+
+        async def _do_call():
+            return await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _VERIFIER_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"},
+                **kwargs,
+            )
+
+        response = await _openai_call_with_retry(_do_call, model)
         raw = response.choices[0].message.content or ""
         result = _parse_verification_json(raw, model, claimed_complexity, claimed_reasoning_type)
         logger.info(
-            "verification: OpenAI fallback (%s) verified question — "
+            "verification: OpenAI (%s) verified question — "
             "answerable=%s, complexity_match=%s, reasoning_match=%s",
             model,
             result.answerable_from_context,
@@ -211,12 +284,12 @@ async def _verify_with_openai(
 
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "verification: OpenAI fallback verification failed — using mock. error=%s", exc
+            "verification: OpenAI (%s) failed — using mock. error=%s", model, exc
         )
         return _mock_verification(
             claimed_complexity,
             claimed_reasoning_type,
-            note=f"[mock] OpenAI fallback verification failed: {exc}",
+            note=f"[mock] OpenAI verification failed: {exc}",
         )
 
 
@@ -275,7 +348,7 @@ async def verify_question(
                 or "gpt-4o-mini"
             )
             logger.info(
-                "verification: ANTHROPIC_API_KEY not set — using OpenAI fallback (%s) "
+                "verification: ANTHROPIC_API_KEY not set — using OpenAI (%s) "
                 "for claimed_complexity=%d, claimed_reasoning_type=%s",
                 fallback_model,
                 claimed_complexity,
@@ -342,3 +415,46 @@ async def verify_question(
             claimed_reasoning_type,
             note=f"[mock] Verification failed: {exc}",
         )
+
+
+async def verify_question_gpt(
+    question: str,
+    reference_answer: str,
+    context: "RetrievalContext",
+    claimed_complexity: int,
+    claimed_reasoning_type: str,
+) -> VerificationMetadata:
+    """Run the verifier via the GPT panel judge (QUIZ_GPT_JUDGE_MODEL, default gpt-5-mini).
+
+    Uses the identical locked verifier prompt as ``verify_question()`` but routes
+    through OpenAI, making it the second leg of the two-judge panel. The model is
+    read from ``QUIZ_GPT_JUDGE_MODEL`` (default ``gpt-5-mini``).
+
+    Falls back to a conservative mock when ``OPENAI_API_KEY`` is absent.
+    """
+    openai_key = (
+        os.environ.get("OPENAI_API_KEY", "")
+        or os.environ.get("LLM_BINDING_API_KEY", "")
+    )
+    model = os.environ.get("QUIZ_GPT_JUDGE_MODEL", "") or "gpt-5-mini"
+    if not openai_key:
+        logger.info(
+            "verification_gpt: OPENAI_API_KEY not set — returning mock for "
+            "claimed_complexity=%d, claimed_reasoning_type=%s",
+            claimed_complexity,
+            claimed_reasoning_type,
+        )
+        return _mock_verification(
+            claimed_complexity,
+            claimed_reasoning_type,
+            note="[mock] OPENAI_API_KEY not set — GPT panel verification skipped.",
+        )
+    return await _verify_with_openai(
+        question=question,
+        reference_answer=reference_answer,
+        context=context,
+        claimed_complexity=claimed_complexity,
+        claimed_reasoning_type=claimed_reasoning_type,
+        openai_key=openai_key,
+        model=model,
+    )

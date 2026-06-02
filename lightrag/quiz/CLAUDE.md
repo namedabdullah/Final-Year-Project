@@ -155,6 +155,12 @@ Verification: `ANTHROPIC_API_KEY`, `QUIZ_VERIFICATION_FALLBACK_MODEL`.
 Pedagogy/correctness judges: `QUIZ_PEDAGOGY_MODEL`, `QUIZ_CORRECTNESS_MODEL` (both default
 `claude-sonnet-4-6`; reuse the verifier's key + OpenAI fallback). The correctness fact-check
 is gated per-request by `run_correctness_check` (default off), not an env var.
+GPT panel judge (second leg of two-judge panel): `QUIZ_GPT_JUDGE_MODEL` (default `gpt-5-mini`);
+reads `OPENAI_API_KEY`/`LLM_BINDING_API_KEY`. Runs in parallel with Claude on every question
+when `run_verification=True`. Results stored in `*_gpt` fields of `QuizQuestionMetadata`.
+OpenAI API: all calls use `max_completion_tokens` (not deprecated `max_tokens`) and
+`temperature=0`; o-series reasoning models (o1, o3, o4-mini) are auto-detected and have
+`temperature` omitted since they reject that parameter.
 
 > Note: deterministic floors default to no-op (`QUIZ_MIN_ENTITY_DEGREE=0`,
 > `QUIZ_MIN_CHUNK_DENSITY=0.0`) — they must be calibrated from the corpus before the matrix run.

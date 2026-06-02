@@ -39,8 +39,8 @@ class QuizGenerateRequest(BaseModel):
         "medium",
         description="Difficulty level — controls retrieval depth AND reasoning type.",
     )
-    num_questions: Literal[10, 25, 50] = Field(
-        10, description="Number of questions to generate."
+    num_questions: Literal[5, 10, 25, 50] = Field(
+        10, description="Number of questions to generate (5 = pilot per judge-methodology §10 Step 2)."
     )
     run_verification: bool = Field(
         True,
@@ -264,9 +264,14 @@ class QuizQuestionMetadata(BaseModel):
 
     retrieval: RetrievalMetadata
     generation: GenerationMetadata
+    # Claude Sonnet judge (primary — out-family with GPT-4o generator)
     verification: Optional[VerificationMetadata] = None
     pedagogy: Optional[PedagogyMetadata] = None
     correctness: Optional[CorrectnessMetadata] = None
+    # GPT panel judge (QUIZ_GPT_JUDGE_MODEL, default gpt-5-mini)
+    verification_gpt: Optional[VerificationMetadata] = None
+    pedagogy_gpt: Optional[PedagogyMetadata] = None
+    correctness_gpt: Optional[CorrectnessMetadata] = None
     human_rating: Optional[HumanRatingMetadata] = None
 
 

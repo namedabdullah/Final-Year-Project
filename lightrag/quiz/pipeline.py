@@ -44,10 +44,15 @@ from lightrag.quiz.schemas import (
     QuizQuestionMetadata,
     RetrievalMetadata,
 )
-from lightrag.quiz.pedagogy import judge_correctness, judge_pedagogy
+from lightrag.quiz.pedagogy import (
+    judge_correctness,
+    judge_correctness_gpt,
+    judge_pedagogy,
+    judge_pedagogy_gpt,
+)
 from lightrag.quiz.seeds import sample_seeds
 from lightrag.quiz.storage import load_quiz, save_quiz, save_reverified_quiz
-from lightrag.quiz.verification import verify_question
+from lightrag.quiz.verification import verify_question, verify_question_gpt
 
 if TYPE_CHECKING:
     from lightrag import LightRAG
@@ -193,10 +198,11 @@ async def _generate_one(
         retrieved_chunk_count=chunk_count,
     )
 
-    # 4. Evaluate (optional). The verifier (the locked instrument), the pedagogy
-    # judge, and the opt-in correctness fact-check are independent LLM calls — run
-    # whichever are enabled concurrently to keep per-question latency low.
+    # 4. Evaluate (optional). All judge calls are independent — run them all
+    # concurrently to keep per-question latency low. Claude (primary, out-family)
+    # and GPT (second judge, in-family) run in parallel for every enabled role.
     verification_meta = pedagogy_meta = correctness_meta = None
+    verification_gpt_meta = pedagogy_gpt_meta = correctness_gpt_meta = None
     jobs = []
     if req.run_verification:
         jobs.append((
@@ -210,20 +216,41 @@ async def _generate_one(
             ),
         ))
         jobs.append((
+            "verification_gpt",
+            verify_question_gpt(
+                question=question,
+                reference_answer=reference_answer,
+                context=ctx,
+                claimed_complexity=claimed_complexity,
+                claimed_reasoning_type=claimed_reasoning,
+            ),
+        ))
+        jobs.append((
             "pedagogy",
             judge_pedagogy(question=question, reference_answer=reference_answer),
+        ))
+        jobs.append((
+            "pedagogy_gpt",
+            judge_pedagogy_gpt(question=question, reference_answer=reference_answer),
         ))
     if req.run_correctness_check:
         jobs.append((
             "correctness",
             judge_correctness(question=question, reference_answer=reference_answer),
         ))
+        jobs.append((
+            "correctness_gpt",
+            judge_correctness_gpt(question=question, reference_answer=reference_answer),
+        ))
     if jobs:
         done = await asyncio.gather(*(coro for _, coro in jobs))
         results = dict(zip((name for name, _ in jobs), done))
         verification_meta = results.get("verification")
+        verification_gpt_meta = results.get("verification_gpt")
         pedagogy_meta = results.get("pedagogy")
+        pedagogy_gpt_meta = results.get("pedagogy_gpt")
         correctness_meta = results.get("correctness")
+        correctness_gpt_meta = results.get("correctness_gpt")
 
     return QuizQuestionMetadata(
         question_id=str(uuid.uuid4()),
@@ -234,8 +261,11 @@ async def _generate_one(
         retrieval=retrieval_meta,
         generation=generation_meta,
         verification=verification_meta,
+        verification_gpt=verification_gpt_meta,
         pedagogy=pedagogy_meta,
+        pedagogy_gpt=pedagogy_gpt_meta,
         correctness=correctness_meta,
+        correctness_gpt=correctness_gpt_meta,
     )
 
 

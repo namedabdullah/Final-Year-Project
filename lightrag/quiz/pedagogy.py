@@ -19,13 +19,76 @@ is opt-in via ``QuizGenerateRequest.run_correctness_check`` (an extra call/quest
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import re
 
 import json_repair
 
 from lightrag.quiz.schemas import CorrectnessMetadata, PedagogyMetadata
 from lightrag.utils import logger
+
+# ---------------------------------------------------------------------------
+# OpenAI API helpers (mirrors verification.py — keep in sync)
+# ---------------------------------------------------------------------------
+
+
+_JUDGE_RETRY_ATTEMPTS = int(os.environ.get("QUIZ_JUDGE_RETRY_ATTEMPTS", "4"))
+_JUDGE_RETRY_BASE_DELAY = float(os.environ.get("QUIZ_JUDGE_RETRY_BASE_DELAY", "2.0"))
+
+
+async def _openai_call_with_retry(coro_fn, model: str):
+    """Call an async OpenAI coroutine-factory with exponential backoff on 429s.
+
+    ``coro_fn`` is a zero-argument async callable (re-creates the coroutine each
+    attempt). Retries only on HTTP 429 — all other errors propagate immediately.
+    """
+    for attempt in range(_JUDGE_RETRY_ATTEMPTS):
+        try:
+            return await coro_fn()
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            is_rate_limit = "429" in msg or "rate_limit" in msg.lower() or "rate limit" in msg.lower()
+            if is_rate_limit and attempt < _JUDGE_RETRY_ATTEMPTS - 1:
+                delay = _JUDGE_RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "pedagogy: OpenAI (%s) rate-limited — retrying in %.1fs "
+                    "(attempt %d/%d)",
+                    model, delay, attempt + 1, _JUDGE_RETRY_ATTEMPTS,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+
+def _is_reasoning_model(model: str) -> bool:
+    """Return True for models that reject the temperature parameter.
+
+    Covers o-series reasoning models (o1, o3, o4-mini …) and the gpt-5 family
+    (gpt-5-mini only supports temperature=1, its fixed default).
+    """
+    m = model.lower()
+    return bool(re.match(r"^o\d", m)) or m.startswith("gpt-5")
+
+
+# Reasoning models (o-series, gpt-5) spend max_completion_tokens on hidden
+# reasoning *before* any visible output; a small ceiling (512) gets fully
+# consumed by reasoning → empty output → parse-fail → mock (seen in the Step-2
+# pilot). Floor their budget so the JSON answer survives. Mirrors
+# verification.py — keep in sync. Tunable via QUIZ_REASONING_COMPLETION_TOKENS.
+_REASONING_MIN_COMPLETION_TOKENS = int(os.environ.get("QUIZ_REASONING_COMPLETION_TOKENS", "4096"))
+
+
+def _openai_chat_kwargs(model: str, max_tokens: int) -> dict:
+    """Return OpenAI chat.completions kwargs: max_completion_tokens (+ temperature=0
+    for standard chat models). Reasoning models reject temperature and burn the
+    budget on reasoning, so their budget is floored at
+    ``_REASONING_MIN_COMPLETION_TOKENS`` to leave room for the JSON output."""
+    if _is_reasoning_model(model):
+        return {"max_completion_tokens": max(max_tokens, _REASONING_MIN_COMPLETION_TOKENS)}
+    return {"max_completion_tokens": max_tokens, "temperature": 0}
+
 
 # ---------------------------------------------------------------------------
 # System prompts
@@ -240,7 +303,7 @@ async def _call_judge_llm(system_prompt: str, user_prompt: str, anthropic_model:
                     {"role": "user", "content": user_prompt},
                 ],
                 response_format={"type": "json_object"},
-                max_tokens=512,
+                **_openai_chat_kwargs(fallback_model, 512),
             )
             return (response.choices[0].message.content or ""), fallback_model
         except Exception as exc:  # noqa: BLE001
@@ -289,6 +352,42 @@ async def judge_pedagogy(
         return _mock_pedagogy(note=f"[mock] pedagogy parse failed: {exc}")
 
 
+async def _call_openai_judge(
+    system_prompt: str,
+    user_prompt: str,
+    model: str,
+    openai_key: str,
+):
+    """Explicit OpenAI call to a named model for the GPT panel judge.
+
+    Unlike ``_call_judge_llm``'s OpenAI path (which reads model from the fallback
+    env-var chain), this targets a specific model directly. Returns
+    ``(raw_text, model)`` or ``None`` on failure.
+    """
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=openai_key)
+        kwargs = _openai_chat_kwargs(model, 512)
+
+        async def _do_call():
+            return await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"},
+                **kwargs,
+            )
+
+        response = await _openai_call_with_retry(_do_call, model)
+        return (response.choices[0].message.content or ""), model
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pedagogy_gpt: OpenAI judge call failed — %s", exc)
+        return None
+
+
 async def judge_correctness(
     question: str,
     reference_answer: str,
@@ -316,3 +415,87 @@ async def judge_correctness(
     except Exception as exc:  # noqa: BLE001
         logger.warning("correctness: parse failed — using mock. error=%s", exc)
         return _mock_correctness(note=f"[mock] correctness parse failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# GPT panel judge (second leg of the two-judge panel)
+# ---------------------------------------------------------------------------
+
+
+async def judge_pedagogy_gpt(
+    question: str,
+    reference_answer: str,
+) -> PedagogyMetadata:
+    """Score pedagogy via the GPT panel judge (QUIZ_GPT_JUDGE_MODEL, default gpt-5-mini).
+
+    Uses the identical prompt as ``judge_pedagogy()``. Reads ``OPENAI_API_KEY``
+    (or ``LLM_BINDING_API_KEY``) and ``QUIZ_GPT_JUDGE_MODEL``. Falls back to a
+    conservative mock when the key is absent.
+    """
+    openai_key = (
+        os.environ.get("OPENAI_API_KEY", "")
+        or os.environ.get("LLM_BINDING_API_KEY", "")
+    )
+    model = os.environ.get("QUIZ_GPT_JUDGE_MODEL", "") or "gpt-5-mini"
+    if not openai_key:
+        return _mock_pedagogy(
+            note="[mock] OPENAI_API_KEY not set — GPT panel pedagogy skipped."
+        )
+    result = await _call_openai_judge(
+        _PEDAGOGY_SYSTEM_PROMPT,
+        _build_qa_user_prompt(question, reference_answer),
+        model,
+        openai_key,
+    )
+    if result is None:
+        return _mock_pedagogy()
+    raw, model_used = result
+    try:
+        meta = _parse_pedagogy_json(raw, model=model_used)
+        logger.info(
+            "pedagogy_gpt: judged — value=%s bloom=%s completeness=%s",
+            meta.pedagogical_value,
+            meta.bloom_level or "?",
+            meta.answer_completeness,
+        )
+        return meta
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pedagogy_gpt: parse failed — using mock. error=%s", exc)
+        return _mock_pedagogy(note=f"[mock] GPT pedagogy parse failed: {exc}")
+
+
+async def judge_correctness_gpt(
+    question: str,
+    reference_answer: str,
+) -> CorrectnessMetadata:
+    """Fact-check via the GPT panel judge (QUIZ_GPT_JUDGE_MODEL, default gpt-5-mini).
+
+    Uses the identical prompt as ``judge_correctness()``. Reads ``OPENAI_API_KEY``
+    (or ``LLM_BINDING_API_KEY``) and ``QUIZ_GPT_JUDGE_MODEL``. Falls back to a
+    conservative mock when the key is absent.
+    """
+    openai_key = (
+        os.environ.get("OPENAI_API_KEY", "")
+        or os.environ.get("LLM_BINDING_API_KEY", "")
+    )
+    model = os.environ.get("QUIZ_GPT_JUDGE_MODEL", "") or "gpt-5-mini"
+    if not openai_key:
+        return _mock_correctness(
+            note="[mock] OPENAI_API_KEY not set — GPT panel correctness skipped."
+        )
+    result = await _call_openai_judge(
+        _CORRECTNESS_SYSTEM_PROMPT,
+        _build_qa_user_prompt(question, reference_answer),
+        model,
+        openai_key,
+    )
+    if result is None:
+        return _mock_correctness()
+    raw, model_used = result
+    try:
+        meta = _parse_correctness_json(raw, model=model_used)
+        logger.info("correctness_gpt: judged — correctness=%s", meta.answer_correctness)
+        return meta
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("correctness_gpt: parse failed — using mock. error=%s", exc)
+        return _mock_correctness(note=f"[mock] GPT correctness parse failed: {exc}")
