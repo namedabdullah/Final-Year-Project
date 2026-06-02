@@ -214,76 +214,111 @@ def pairwise_cosine_stats(vectors: Sequence[Sequence[float]]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Reasoning-depth tiers (reasoning-match reframe, 2026-06)
+# Reasoning-type appropriateness (depth-aware, kept discriminating between arms)
 # ---------------------------------------------------------------------------
 
-# The verifier classifies each question's actual_reasoning_type into one of five
-# types that form a natural *depth* ordering, collapsing to three tiers:
-#   tier 1 (recall)       : factual
-#   tier 2 (relational)   : comparative
-#   tier 3 (higher-order) : causal / inferential / analytical
-# Exact-type matching against a single claimed label is too brittle: a genuinely
-# hard question legitimately varies across the tier-3 types (a 2026-05 run scored
-# hard mix 0/10 on exact 'causal' yet all 10 were causal/inferential/analytical).
-# So we score reasoning by *tier*, not exact type. easy/medium tiers are
-# singletons, so this only relaxes 'hard'.
-REASONING_TIER = {
-    "factual": 1,
-    "comparative": 2,
-    "causal": 3,
-    "inferential": 3,
-    "analytical": 3,
+# The verifier classifies actual_reasoning_type into one of five types. A
+# question "matches" its claimed reasoning if the actual type is accepted for the
+# claim. For 'hard':
+#   - causal / analytical always count (cause-effect chains, multi-element analysis);
+#   - inferential is KEPT but tightened — the verifier's "inferential" label is
+#     broad (any unstated conclusion) and otherwise passes nearly everything, so
+#     it counts only as a *genuine multi-piece* inference (actual complexity
+#     >= _CONDITIONAL_MIN_PIECES). A single-passage inference does not clear hard.
+# This keeps the metric discriminating between the arms (mix's multi-hop synthesis
+# skews analytical / multi-piece; naive carries more single-passage inferences).
+ACCEPTED_REASONING = {
+    "factual": {"factual"},
+    "comparative": {"comparative"},
+    "causal": {"causal", "analytical"},
 }
-EXPECTED_REASONING_TIER = {"easy": 1, "medium": 2, "hard": 3}
+
+# The same accepted sets keyed by difficulty (factual=easy / comparative=medium /
+# causal=hard mirror generation.REASONING_TYPE).
+ACCEPTED_REASONING_BY_DIFFICULTY = {
+    "easy": {"factual"},
+    "medium": {"comparative"},
+    "hard": {"causal", "analytical"},
+}
+
+# 'inferential' counts for hard only when the inference spans at least this many
+# retrieved pieces — a "little strict" bar, milder than hard's own >=3 floor.
+_CONDITIONAL_MIN_PIECES = 2
 
 
-def reasoning_is_appropriate(difficulty: str, actual_reasoning_type: str) -> bool:
-    """True if the verifier's reasoning type is the depth tier expected for ``difficulty``.
-
-    Replaces brittle exact-type matching: the three higher-order types
-    (causal / inferential / analytical) share tier 3, so a *hard* question the
-    verifier labels analytical or inferential — rather than exactly the claimed
-    ``causal`` — still counts as appropriately reasoned. ``easy``/``medium`` map
-    to singleton tiers, so their behaviour is identical to exact matching.
-
-    Unknown difficulty or reasoning type returns False (conservative).
-    """
-    exp = EXPECTED_REASONING_TIER.get((difficulty or "").strip().lower())
-    got = REASONING_TIER.get((actual_reasoning_type or "").strip().lower())
-    if exp is None or got is None:
+def _is_multi_piece(actual_complexity) -> bool:
+    try:
+        return int(actual_complexity) >= _CONDITIONAL_MIN_PIECES
+    except (TypeError, ValueError):
         return False
-    return got == exp
 
 
-def reasoning_types_match(claimed_reasoning_type: str, actual_reasoning_type: str) -> bool:
-    """True if claimed and actual reasoning types share a depth tier.
+def reasoning_types_match(
+    claimed_reasoning_type: str,
+    actual_reasoning_type: str,
+    actual_complexity=None,
+) -> bool:
+    """True if the actual reasoning type is accepted for the claimed type.
 
-    Per-question companion to :func:`reasoning_is_appropriate` for callers that
-    have the *claimed* type rather than the difficulty. Hard's claimed ``causal``
-    (tier 3) is satisfied by any tier-3 actual (causal / inferential / analytical),
-    so a hard question is no longer marked a mismatch merely for being analytical.
+    Hard's claimed ``causal`` accepts ``causal`` / ``analytical`` outright, and
+    ``inferential`` only as a genuine multi-piece inference
+    (``actual_complexity >= 2``) — the broad "inferential" label otherwise lets
+    almost everything pass. Without complexity info, inferential does not count.
+    Unknown inputs return False (conservative).
     """
-    a = REASONING_TIER.get((claimed_reasoning_type or "").strip().lower())
-    b = REASONING_TIER.get((actual_reasoning_type or "").strip().lower())
-    return a is not None and b is not None and a == b
+    claimed = (claimed_reasoning_type or "").strip().lower()
+    actual = (actual_reasoning_type or "").strip().lower()
+    accepted = ACCEPTED_REASONING.get(claimed)
+    if accepted is None:
+        return False
+    if actual in accepted:
+        return True
+    if claimed == "causal" and actual == "inferential":
+        return _is_multi_piece(actual_complexity)
+    return False
+
+
+def reasoning_is_appropriate(
+    difficulty: str,
+    actual_reasoning_type: str,
+    actual_complexity=None,
+) -> bool:
+    """Difficulty-keyed companion to :func:`reasoning_types_match`.
+
+    easy→factual, medium→comparative, hard→{causal, analytical} outright, plus
+    ``inferential`` for hard only as a multi-piece inference
+    (``actual_complexity >= 2``). Unknown inputs return False (conservative).
+    """
+    diff = (difficulty or "").strip().lower()
+    actual = (actual_reasoning_type or "").strip().lower()
+    accepted = ACCEPTED_REASONING_BY_DIFFICULTY.get(diff)
+    if accepted is None:
+        return False
+    if actual in accepted:
+        return True
+    if diff == "hard" and actual == "inferential":
+        return _is_multi_piece(actual_complexity)
+    return False
 
 
 # Minimum context pieces a question should require, keyed by its claimed retrieval
-# complexity (easy=1 / medium=2 / hard=3). Hard relaxes to >=2: we don't insist a
-# hard question need exactly the 3 pieces retrieved, only genuine synthesis (>=2).
-_MIN_PIECES_BY_CLAIM = {1: 1, 2: 2, 3: 2}
+# complexity (easy=1 / medium=2 / hard=3): the question must genuinely need at
+# least as many pieces as the retrieval depth it claims. 'hard' requires >=3
+# (full synthesis) — the bar where mix (multi-hop) and naive (often answerable
+# from 1-2 chunks) separate most clearly.
+_MIN_PIECES_BY_CLAIM = {1: 1, 2: 2, 3: 3}
 
 
 def complexity_is_appropriate(claimed_complexity: int, actual_complexity: int) -> bool:
     """True if the measured complexity meets the floor expected for the claim.
 
-    Reframes the brittle exact ``claimed == actual`` match: a hard question
-    (claimed 3) that genuinely needs 2 pieces still counts as appropriately
-    complex; a hard question answerable from 1 piece does not. Floor per claim:
-    easy(1)->1, medium(2)->2, hard(3)->2 (claims above 3 also floor at 2).
+    Floor per claim: easy(1)->1, medium(2)->2, hard(3)->3 — the question must need
+    at least as many context pieces as the retrieval depth claims. A hard question
+    answerable from 1-2 pieces is not appropriately complex.
     """
     try:
-        floor = _MIN_PIECES_BY_CLAIM.get(int(claimed_complexity), 2)
+        claim = int(claimed_complexity)
+        floor = _MIN_PIECES_BY_CLAIM.get(claim, claim)
         return int(actual_complexity) >= floor
     except (TypeError, ValueError):
         return False
@@ -297,6 +332,6 @@ __all__ = [
     "reasoning_is_appropriate",
     "reasoning_types_match",
     "complexity_is_appropriate",
-    "REASONING_TIER",
-    "EXPECTED_REASONING_TIER",
+    "ACCEPTED_REASONING",
+    "ACCEPTED_REASONING_BY_DIFFICULTY",
 ]

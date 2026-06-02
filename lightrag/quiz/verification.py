@@ -136,7 +136,9 @@ def _parse_verification_json(
         actual_reasoning_type=actual_reasoning,
         answerable_from_context=bool(data["answerable_from_context"]),
         claimed_complexity_matches=complexity_is_appropriate(claimed_complexity, actual_complexity),
-        claimed_reasoning_matches=reasoning_types_match(claimed_reasoning_type, actual_reasoning),
+        claimed_reasoning_matches=reasoning_types_match(
+            claimed_reasoning_type, actual_reasoning, actual_complexity
+        ),
         notes=str(data["notes"]),
     )
 

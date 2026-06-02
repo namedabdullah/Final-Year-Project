@@ -188,30 +188,31 @@ def test_overlap_partial() -> None:
 
 
 @pytest.mark.parametrize(
-    "difficulty, actual, expected",
+    "difficulty, actual, complexity, expected",
     [
-        # HARD accepts the whole tier-3 set (the point of the reframe).
-        ("hard", "causal", True),
-        ("hard", "analytical", True),
-        ("hard", "inferential", True),
-        ("hard", "comparative", False),   # too shallow for hard
-        ("hard", "factual", False),
-        # MEDIUM is a singleton tier (comparative) -> identical to exact match.
-        ("medium", "comparative", True),
-        ("medium", "causal", False),      # deeper than medium's tier
-        ("medium", "factual", False),     # too shallow
-        # EASY is a singleton tier (factual).
-        ("easy", "factual", True),
-        ("easy", "comparative", False),
+        # HARD: causal/analytical outright; inferential only as a multi-piece inference.
+        ("hard", "causal", 3, True),
+        ("hard", "analytical", 3, True),
+        ("hard", "inferential", 2, True),    # multi-piece inference counts
+        ("hard", "inferential", 1, False),   # single-passage inference does not
+        ("hard", "inferential", None, False),
+        ("hard", "comparative", 3, False),   # too shallow for hard
+        ("hard", "factual", 3, False),
+        # MEDIUM / EASY are singletons.
+        ("medium", "comparative", 2, True),
+        ("medium", "causal", 3, False),      # deeper than medium's set
+        ("medium", "factual", 1, False),     # too shallow
+        ("easy", "factual", 1, True),
+        ("easy", "comparative", 1, False),
         # Robustness: unknown / empty inputs are conservative (False).
-        ("hard", "", False),
-        ("hard", "unknown-type", False),
-        ("", "causal", False),
-        ("HARD", "ANALYTICAL", True),     # case-insensitive
+        ("hard", "", 3, False),
+        ("hard", "unknown-type", 3, False),
+        ("", "causal", 3, False),
+        ("HARD", "ANALYTICAL", 3, True),     # case-insensitive
     ],
 )
-def test_reasoning_is_appropriate(difficulty: str, actual: str, expected: bool) -> None:
-    assert reasoning_is_appropriate(difficulty, actual) is expected
+def test_reasoning_is_appropriate(difficulty: str, actual: str, complexity, expected: bool) -> None:
+    assert reasoning_is_appropriate(difficulty, actual, complexity) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -253,23 +254,25 @@ def test_estimate_clarity_multi_sentence_is_penalized() -> None:
 
 
 @pytest.mark.parametrize(
-    "claimed, actual, expected",
+    "claimed, actual, complexity, expected",
     [
-        ("causal", "causal", True),
-        ("causal", "analytical", True),    # the fix: hard 'causal' accepts analytical
-        ("causal", "inferential", True),
-        ("causal", "comparative", False),  # tier 3 vs tier 2
-        ("causal", "factual", False),
-        ("comparative", "comparative", True),
-        ("comparative", "causal", False),  # medium claim, deeper actual
-        ("factual", "factual", True),
-        ("causal", "", False),             # unknown actual
-        ("", "causal", False),             # unknown claim
-        ("causal", "analyze", False),      # not a canonical type -> unknown
+        ("causal", "causal", 3, True),
+        ("causal", "analytical", 3, True),       # hard 'causal' accepts analytical
+        ("causal", "inferential", 2, True),      # inferential KEPT, as a multi-piece inference
+        ("causal", "inferential", 1, False),     # single-passage inference -> too soft for hard
+        ("causal", "inferential", None, False),  # no complexity info -> conservative
+        ("causal", "comparative", 3, False),     # not in causal's accepted set
+        ("causal", "factual", 3, False),
+        ("comparative", "comparative", 1, True),
+        ("comparative", "causal", 3, False),     # medium claim, deeper actual
+        ("factual", "factual", 1, True),
+        ("causal", "", 3, False),                # unknown actual
+        ("", "causal", 3, False),                # unknown claim
+        ("causal", "analyze", 3, False),         # not a canonical type -> unknown
     ],
 )
-def test_reasoning_types_match(claimed: str, actual: str, expected: bool) -> None:
-    assert reasoning_types_match(claimed, actual) is expected
+def test_reasoning_types_match(claimed: str, actual: str, complexity, expected: bool) -> None:
+    assert reasoning_types_match(claimed, actual, complexity) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +284,7 @@ def test_reasoning_types_match(claimed: str, actual: str, expected: bool) -> Non
     "claimed, actual, expected",
     [
         (3, 3, True),     # hard, needs 3
-        (3, 2, True),     # hard, needs 2 -> still appropriate (the fix)
+        (3, 2, False),    # hard now requires >=3 pieces, so 2 is too simple
         (3, 1, False),    # hard, answerable from 1 -> too simple
         (2, 2, True),     # medium
         (2, 1, False),    # medium, too simple
