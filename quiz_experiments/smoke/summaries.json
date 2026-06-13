@@ -1,0 +1,46 @@
+[
+  {
+    "mode": "mix",
+    "arm": "graph",
+    "difficulty": "medium",
+    "requested": 10,
+    "generated": 10,
+    "answerable_rate": null,
+    "complexity_match_rate": null,
+    "reasoning_match_rate": null,
+    "mean_figure_dependency": 0.0,
+    "mean_lexical_overlap": 0.0501,
+    "diversity": {
+      "mean_pairwise_similarity": 0.438332,
+      "max_pairwise_similarity": 0.805831,
+      "question_count": 10
+    },
+    "files_total": 3,
+    "files_contributed": 3,
+    "files_zero": [],
+    "warnings": 0,
+    "quiz_id": "755d21ee-278a-4f7a-b9f1-1870df85b340"
+  },
+  {
+    "mode": "naive",
+    "arm": "naive",
+    "difficulty": "medium",
+    "requested": 10,
+    "generated": 10,
+    "answerable_rate": null,
+    "complexity_match_rate": null,
+    "reasoning_match_rate": null,
+    "mean_figure_dependency": 0.0,
+    "mean_lexical_overlap": 0.0546,
+    "diversity": {
+      "mean_pairwise_similarity": 0.423531,
+      "max_pairwise_similarity": 0.753935,
+      "question_count": 10
+    },
+    "files_total": 3,
+    "files_contributed": 3,
+    "files_zero": [],
+    "warnings": 0,
+    "quiz_id": "bb79f23d-c105-412a-b35a-e379e98323c8"
+  }
+]

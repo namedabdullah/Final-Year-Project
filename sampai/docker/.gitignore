@@ -1,0 +1,7 @@
+# Written by mineru-autoselect.{sh,ps1} at runtime — machine-specific, not committed.
+mineru.generated.env
+# Local compose overrides.
+.env
+
+# runtime logs
+scripts/*.log

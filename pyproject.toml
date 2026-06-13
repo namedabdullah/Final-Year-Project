@@ -151,6 +151,25 @@ observability = [
     "langfuse>=3.8.1",
 ]
 
+# SAMpai classroom layer (lightrag/api/sampai/). Additive — does not affect the
+# core LightRAG package or the bundled server when uninstalled (graft is fail-soft).
+sampai = [
+    "lightrag-hku[api]",                  # FastAPI server + core deps
+    # Only the storage backends SAMpai actually uses (not the full offline-storage set).
+    "neo4j>=5.0.0,<7.0.0",               # graph store
+    "qdrant-client>=1.11.0,<2.0.0",      # vector store
+    "redis>=5.0.0,<8.0.0",               # KV + doc status
+    "sqlalchemy[asyncio]>=2.0.0,<3.0.0",  # app DB ORM (async)
+    "asyncpg>=0.31.0,<1.0.0",             # Postgres async driver (app DB + Neo4j? no — app DB)
+    "alembic>=1.13.0,<2.0.0",             # app DB migrations
+    "pydantic-settings>=2.0.0,<3.0.0",    # SampaiSettings
+    "PyJWT>=2.8.0,<3.0.0",                # app-user access tokens
+    "passlib[argon2]>=1.7.4,<2.0.0",      # password hashing
+    "boto3>=1.34.0,<2.0.0",              # Cloudflare R2 (S3 API)
+    "nh3>=0.2.0,<1.0.0",                  # announcement HTML sanitization
+    "python-multipart>=0.0.9",            # file uploads
+]
+
 [project.scripts]
 lightrag-server = "lightrag.api.lightrag_server:main"
 lightrag-gunicorn = "lightrag.api.run_with_gunicorn:main"

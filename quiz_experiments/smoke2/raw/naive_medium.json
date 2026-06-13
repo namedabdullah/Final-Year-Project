@@ -1,0 +1,467 @@
+{
+  "quiz_id": "55847634-6ac3-4921-92d5-8c5b6c9b1123",
+  "created_at": "2026-05-31T16:37:29.231747Z",
+  "request": {
+    "document_ids": [
+      "doc-580eb7a9f93c652c55602b861983480e",
+      "doc-38e16b32e7d6745e41cfef0778243c60",
+      "doc-c5211aabf36293c74d82e4a9a198f793"
+    ],
+    "mode": "naive",
+    "difficulty": "medium",
+    "num_questions": 10,
+    "run_verification": false,
+    "top_k": null,
+    "chunk_top_k": null,
+    "max_entity_tokens": null,
+    "max_relation_tokens": null,
+    "max_total_tokens": null,
+    "user_prompt": null
+  },
+  "questions": [
+    {
+      "question_id": "f51a4b77-4093-4760-a9fc-843f67c493bd",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-000",
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-001"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Scheduling Criteria\n10\nThroughput \u2013 # of processes that complete per unit time (# jobs/time)\nMaximize\nTurnaround time \u2013 time for each process to complete (Tfinish \u2013 Tstart)\nMinimize\nResponse time \u2013",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.070538,
+        "seed_score_components": {
+          "prose": 3,
+          "density": 14,
+          "explan": 41,
+          "llm": 4
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the scheduling goals of maximizing throughput and minimizing turnaround time relate to the different needs of batch systems compared to interactive systems?",
+        "reference_answer": "Batch systems prioritize maximizing throughput and minimizing turnaround time to efficiently process large jobs, while interactive systems focus on minimizing response time to enhance user experience, often sacrificing throughput in the process.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.028225806451612902,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "d2083645-e37d-4b7c-81ab-ea717271b9be",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-002",
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-001"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Fragmentation\n19\nExternal Fragmentation \u2013 total memory space exists to satisfy a request, but it is not contiguous.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.068949,
+        "seed_score_components": {
+          "prose": 8,
+          "density": 1,
+          "explan": 16,
+          "llm": 21
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does external fragmentation differ from internal fragmentation in terms of memory utilization and allocation processes?",
+        "reference_answer": "External fragmentation occurs when total memory exists to satisfy a request, but it is not contiguous, while internal fragmentation arises when allocated memory is slightly larger than requested memory, resulting in unused space within a partition. This difference affects memory utilization because external fragmentation can prevent processes from being allocated even if enough total free memory exists, whereas internal fragmentation indicates wasted space within allocated memory.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.028368794326241134,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "15a619e2-1247-4332-8804-b67f3f80fc69",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-003",
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Operations on Processes\n24\nSystem must provide mechanisms for:\nProcess creation\nProcess termination\n\n# Process Creation\n25\nParent process create children processes, which in turn create other proces",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.057558,
+        "seed_score_components": {
+          "prose": 10,
+          "density": 28,
+          "explan": 73,
+          "llm": 22
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "What are the differences in resource sharing options between parent and child processes during creation compared to their execution relationship after being created?",
+        "reference_answer": "During process creation, a parent can share all, a subset, or no resources with its children, while in execution, the parent can either run concurrently with its children or wait for them to terminate before continuing.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.04608294930875576,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "65051f79-deac-431b-85a3-f363ff696e66",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-38e16b32e7d6745e41cfef0778243c60-mm-drawing-002",
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Process Control Block (PCB)\n16\nInformation associated with each process(also called task control block)\nProcess Management Information\nProcess state (running, ready, blocked, etc.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.069379,
+        "seed_score_components": {
+          "prose": 9,
+          "density": 23,
+          "explan": 17,
+          "llm": 7
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the attributes related to CPU scheduling information and memory management information in a Process Control Block (PCB) interact to affect process performance in an operating system?",
+        "reference_answer": "CPU scheduling information, such as priorities and time slices, determines how and when a process will be allocated CPU time, while memory management information, such as allocated memory segments and page tables, dictates the resources available for that process. The effectiveness of process execution can depend on both the scheduling of CPU time and the adequacy of memory resources, as insufficient memory can hinder performance regardless of CPU scheduling efficiency.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.11842105263157894,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "b725dd05-55cc-40c7-a164-0821e39bf476",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-003",
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Paging\n26\nPhysical  address space of a process can be noncontiguous; process is allocated physical memory whenever the latter is available\nAvoids external fragmentation\nAvoids problem of varying siz",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.065444,
+        "seed_score_components": {
+          "prose": 7,
+          "density": 31,
+          "explan": 12,
+          "llm": 18
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the use of paging to allocate physical memory impact fragmentation, specifically comparing how paging addresses external fragmentation versus the need for compaction to manage internal fragmentation?",
+        "reference_answer": "Paging helps avoid external fragmentation by allowing noncontiguous physical address allocation, whereas internal fragmentation occurs when allocated memory is larger than needed, requiring techniques like compaction to efficiently use memory space.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.04678362573099415,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "6121b2f0-20a8-4d38-a93b-fc3dc1451d79",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-007",
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-006"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# POSIX Real-Time Scheduling\n64\nThe POSIX.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.067492,
+        "seed_score_components": {
+          "prose": 1,
+          "density": 24,
+          "explan": 5,
+          "llm": 24
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the scheduling policies SCHED_FIFO and SCHED_RR in POSIX Real-Time Scheduling differ in terms of handling thread priorities and time-slicing?",
+        "reference_answer": "SCHED_FIFO uses a first-come, first-served strategy without time-slicing for threads of equal priority, while SCHED_RR also employs a first-come, first-served strategy but includes time-slicing, allowing threads of equal priority to share CPU time.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.059322033898305086,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "2256e2b0-8e30-41f7-8f29-ad100f63aa0e",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-003",
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-004"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Translation Look-Aside Buffer\n34\nSome TLBs store address-space identifiers (ASIDs) in each TLB entry \u2013 uniquely identifies each process to provide address-space protection for that process\nOtherwise",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.061885,
+        "seed_score_components": {
+          "prose": 2,
+          "density": 20,
+          "explan": 40,
+          "llm": 26
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the use of address-space identifiers (ASIDs) in TLB entries enhance memory protection compared to the approach of flushing the TLB at every context switch?",
+        "reference_answer": "The use of ASIDs in TLB entries enhances memory protection by uniquely identifying each process, allowing multiple processes to share the TLB without interference, while avoiding the overhead of flushing the TLB at every context switch, which would lead to increased latency and reduced performance.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.05952380952380952,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "64c9c531-9f39-4ff6-9816-d45a840d493c",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-580eb7a9f93c652c55602b861983480e-mm-table-001",
+          "doc-580eb7a9f93c652c55602b861983480e-mm-table-004"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Queueing Model\n54\nDescribes the arrival of processes, and CPU and I/O bursts probabilistically\nCommonly exponential, and described by mean\nComputes average throughput, utilization, waiting time, etc.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.062437,
+        "seed_score_components": {
+          "prose": 14,
+          "density": 15,
+          "explan": 27,
+          "llm": 23
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "What implications do the variations in burst times and arrival times of processes under the First-Come, First-Served (FCFS) scheduling and Shortest Job First (SJF) scheduling have on average waiting times in each model?",
+        "reference_answer": "The variations in burst times and arrival times impact average waiting times by causing processes with longer burst durations to potentially incur greater waiting times in the FCFS model compared to SJF, where shorter jobs are prioritized, thus reducing overall waiting time for the shorter burst processes.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.12345679012345678,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "f1a15f8e-2683-4b47-9089-b30dfedd3c6c",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-007",
+          "doc-c5211aabf36293c74d82e4a9a198f793-chunk-006"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# Example: The Intel 32 & 64-bit Architectures\n60\nDominant industry chips\nPentium CPUs are 32-bit and called IA-32 architecture\nCurrent Intel CPUs are 64-bit and called IA-64 architecture\nMany variati",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.061738,
+        "seed_score_components": {
+          "prose": 5,
+          "density": 6,
+          "explan": 58,
+          "llm": 28
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the architecture difference between IA-32 and IA-64 influence the methods of address generation in terms of segmentation and paging?",
+        "reference_answer": "The IA-32 architecture supports segmentation and paging, allowing for a logical-to-physical address translation where segments can be as large as 4 GB and managed through local and global descriptor tables. In contrast, the IA-64 architecture, being a 64-bit system, typically emphasizes a different layer of address management and may utilize paging more extensively, altering how memory is accessed and organized compared to the IA-32 model.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.03488372093023256,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "c8b05ddc-2f43-4181-989c-11cf03e73174",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-003",
+          "doc-580eb7a9f93c652c55602b861983480e-chunk-001"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-c5211aabf36293c74d82e4a9a198f793",
+          "doc-580eb7a9f93c652c55602b861983480e"
+        ],
+        "seed_query": "# SRTF Scheduling Policy\n30\nShortest Remaining Time First scheduling\nPreemptive version of SJF.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.057687,
+        "seed_score_components": {
+          "prose": 12,
+          "density": 4,
+          "explan": 85,
+          "llm": 34
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the preemptive nature of the Shortest Remaining Time First (SRTF) scheduling policy relate to its effectiveness in minimizing average waiting time, compared to the potential for starvation of longer processes similar to Shortest Job First (SJF)?",
+        "reference_answer": "The preemptive nature of SRTF allows it to continuously select the process with the shortest remaining time, which can effectively minimize average waiting time. However, like SJF, it risks causing starvation for longer processes, as these may be consistently preempted by shorter processes arriving in the queue.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.11965811965811966,
+        "retrieved_chunk_count": 2
+      },
+      "verification": null,
+      "human_rating": null
+    }
+  ],
+  "metadata_path": "D:\\FYP\\LightRAG\\rag_storage\\quizzes\\55847634-6ac3-4921-92d5-8c5b6c9b1123.json",
+  "warnings": [],
+  "file_contributions": [
+    {
+      "doc_id": "doc-38e16b32e7d6745e41cfef0778243c60",
+      "seed_count": 2,
+      "reason": "contributed"
+    },
+    {
+      "doc_id": "doc-c5211aabf36293c74d82e4a9a198f793",
+      "seed_count": 4,
+      "reason": "contributed"
+    },
+    {
+      "doc_id": "doc-580eb7a9f93c652c55602b861983480e",
+      "seed_count": 4,
+      "reason": "contributed"
+    }
+  ],
+  "diversity": {
+    "mean_pairwise_similarity": 0.377936,
+    "max_pairwise_similarity": 0.72284,
+    "question_count": 10
+  }
+}

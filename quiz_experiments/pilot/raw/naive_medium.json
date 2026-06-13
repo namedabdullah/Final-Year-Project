@@ -1,0 +1,638 @@
+{
+  "quiz_id": "0eaa8a6f-562b-49a8-84db-e18e9b68f50a",
+  "created_at": "2026-06-02T08:08:46.204718Z",
+  "request": {
+    "document_ids": [
+      "doc-791a303cacff97bbd42c3b498ac37980",
+      "doc-87c3044293e2a3b0920265c0b15f5c39",
+      "doc-38e16b32e7d6745e41cfef0778243c60"
+    ],
+    "mode": "naive",
+    "difficulty": "medium",
+    "num_questions": 10,
+    "run_verification": true,
+    "run_correctness_check": false,
+    "top_k": null,
+    "chunk_top_k": null,
+    "max_entity_tokens": null,
+    "max_relation_tokens": null,
+    "max_total_tokens": null,
+    "user_prompt": null
+  },
+  "questions": [
+    {
+      "question_id": "1708ea51-756d-42a2-91aa-b6330b82da16",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-002",
+          "doc-87c3044293e2a3b0920265c0b15f5c39-chunk-000"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Mass-Storage Management\n11\nUsually, disks used to store data that does not fit in main memory or data that must be kept for a \u201clong\u201d period\nProper management is of central importance\nEntire speed of",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.072326,
+        "seed_score_components": {
+          "prose": 5,
+          "density": 24,
+          "explan": 4,
+          "llm": 8
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the relationship between a kernel's tasks, such as process management and file system management, influence the efficiency of mass-storage management in an operating system?",
+        "reference_answer": "The efficiency of mass-storage management is enhanced when the kernel's process management effectively coordinates the allocation of memory and I/O operations, while file system management ensures organized access to stored data, allowing multiple applications to efficiently utilize storage resources.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.01730103806228374,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.895
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 1,
+        "actual_reasoning_type": "inferential",
+        "answerable_from_context": false,
+        "claimed_complexity_matches": false,
+        "claimed_reasoning_matches": false,
+        "notes": "The context only lists kernel tasks (including process management and file system management) without explaining how their relationship influences mass-storage management efficiency; the reference answer makes specific causal claims not supported by the retrieved passages, and the reasoning required is inferential rather than comparative."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 3,
+        "bloom_level": "analyze",
+        "answer_completeness": 3,
+        "notes": "The question targets an interesting cross-subsystem relationship, but the reference answer is somewhat vague and surface-level, mentioning coordination and organization without explaining specific mechanisms like scheduling, buffering, or virtual memory interactions with storage."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "e3e7dd8e-00dc-4b72-8ce6-d470ea476de1",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39-chunk-004",
+          "doc-87c3044293e2a3b0920265c0b15f5c39-chunk-003"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# The Role of the Linker and Loader\n39\n\n# Why Applications are OS specific?",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.06391,
+        "seed_score_components": {
+          "prose": 7,
+          "density": 9,
+          "explan": 29,
+          "llm": 26
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the role of the Application Binary Interface (ABI) in enabling applications to execute across different operating systems compare to the necessity of system call mechanisms for parameter passing within an operating system?",
+        "reference_answer": "The Application Binary Interface (ABI) defines the interactions between different components of binary code, allowing applications to run on multiple operating systems by handling system calls appropriately. In contrast, system call mechanisms for parameter passing provide specific methods (like using registers or memory blocks) for an operating system to communicate with applications, which ensures correct operation within the context of that OS. Both concepts highlight the importance of compatibility and communication between applications and operating systems.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.15151515151515152,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.7725
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "The question requires synthesizing information from both passages (ABI from Passage 1 and system call parameter passing from Passage 2) and comparing their roles, which matches the claimed 2-chunk complexity and comparative reasoning type."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "analyze",
+        "answer_completeness": 3,
+        "notes": "The question asks for a meaningful comparison between ABI portability and system call parameter-passing mechanisms, but the reference answer offers only a surface-level contrast without explaining how ABI abstracts platform differences, why parameter-passing conventions (registers vs. stack) matter for correctness, or how the two concepts relate to each other in depth."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "cfa1f508-c513-4234-afb3-a481810bc995",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-38e16b32e7d6745e41cfef0778243c60-mm-drawing-002",
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Process Control Block (PCB)\n16\nInformation associated with each process(also called task control block)\nProcess Management Information\nProcess state (running, ready, blocked, etc.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.070367,
+        "seed_score_components": {
+          "prose": 12,
+          "density": 22,
+          "explan": 14,
+          "llm": 5
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the attributes listed in a Process Control Block, such as process state and memory management information, collectively contribute to the overall efficiency of process scheduling in an operating system?",
+        "reference_answer": "The attributes in a Process Control Block, like process state and memory management information, work together to enable the scheduler to make informed decisions on which processes to run based on their current status and resource needs, ultimately enhancing the system's efficiency.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.11842105263157894,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.8275
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "analytical",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": false,
+        "notes": "The question requires synthesizing multiple PCB attributes from both passages to explain their collective contribution to scheduling efficiency, which is analytical rather than comparative (no explicit comparison between two distinct entities)."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "understand",
+        "answer_completeness": 3,
+        "notes": "The question targets an important integrative concept about PCB role in scheduling, but the reference answer is somewhat superficial and doesn't elaborate on how specific attributes (e.g., CPU registers for context switching, priority fields, memory maps) concretely contribute to scheduling efficiency."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "19bcdb01-9323-4822-b9c1-f6cda9d8ebd0",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-003",
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-004"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Computer System Architecture\n33\nMultiprocessor systems growing in use and importance\nAlso known as parallel systems, tightly-coupled systems\nAdvantages of multiprocessor systems include:\nIncreased t",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.069997,
+        "seed_score_components": {
+          "prose": 1,
+          "density": 29,
+          "explan": 1,
+          "llm": 17
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "What benefits do multiprocessor systems provide in terms of processing efficiency and reliability compared to multicore systems that operate on a single chip?",
+        "reference_answer": "Multiprocessor systems offer increased throughput and resource utilization through parallel processing, while also enhancing reliability with fault tolerance. In contrast, multicore systems achieve efficiency by sharing resources and independent execution of tasks, but their reliability benefits are often tied to the design of the single chip architecture.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.014598540145985401,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.855
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "The question requires comparing multiprocessor systems (Passage 2, slide 33) with multicore systems (Passage 2, slide 34) across two dimensions (efficiency and reliability), which is a comparative analysis drawing from two distinct context passages."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 3,
+        "bloom_level": "understand",
+        "answer_completeness": 3,
+        "notes": "The question targets a meaningful distinction between multiprocessor and multicore architectures, but the reference answer is somewhat superficial and conflates concepts without clearly articulating the key differences in fault isolation, memory architecture, or scalability."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "1859ca96-1250-45ea-91e3-6bf86d249ea5",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-004",
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-005"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# There is no Magic in OS design\n42\nNothing is permanent, high rate of change in hardware and applications\nThis is Engineering\nImperfection\nTradeoffs (performance/functionality)\nConstraints\nHardware,",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.068748,
+        "seed_score_components": {
+          "prose": 9,
+          "density": 3,
+          "explan": 10,
+          "llm": 23
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the constraints faced during operating system design regarding hardware cost and power consumption influence the performance trade-offs made in multiprocessor versus multicore systems?",
+        "reference_answer": "The constraints of hardware cost and power consumption can lead to different performance trade-offs in multiprocessor systems, which require managing more shared resources and overhead, compared to multicore systems that leverage on-chip communication for efficiency. These trade-offs must be balanced to optimize overall system performance and cost-effectiveness.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.030821917808219176,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.8725
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "analytical",
+        "answerable_from_context": false,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": false,
+        "notes": "While 2 passages are needed, the question asks for a causal/analytical link between hardware cost/power constraints and specific performance trade-offs in multiprocessor vs. multicore systems; the context only tangentially mentions these constraints (Passage 2 lists 'cost, power' as generic constraints) without explicitly connecting them to the multiprocessor vs. multicore trade-offs described in the reference answer, making the answer not fully supported by the context."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "analyze",
+        "answer_completeness": 2,
+        "notes": "The question targets important architectural trade-offs in OS design, but the reference answer is superficial and vague, failing to explain specific mechanisms like cache coherence costs, interconnect latency, thermal design power, or how these concretely differ between multiprocessor and multicore architectures."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "7b2012c5-5861-4450-96c7-3f1d2f6700e9",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-000",
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-001"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Concurrent Computing\n9\nInitially, simple batch systems could entertain only one user/program at a time\nSpooling (the overlapping of output of one job with input of other jobs) and buffering (storing",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.057181,
+        "seed_score_components": {
+          "prose": 11,
+          "density": 34,
+          "explan": 52,
+          "llm": 25
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "In what ways do multiprogramming and multitasking differ in how they manage CPU resources, and how does this impact system efficiency?",
+        "reference_answer": "Multiprogramming allows multiple programs to reside in memory at the same time and runs them by scheduling based on job selection, effectively keeping the CPU busy and improving throughput. In contrast, multitasking involves rapidly switching between tasks on a single CPU to create the illusion of simultaneous execution, which adds complexity to resource management. This difference in resource management leads multiprogramming to focus on maximizing CPU and I/O utilization, while multitasking emphasizes responsiveness and user experience.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.026615969581749048,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.9
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "The question requires comparing multiprogramming and multitasking across two passages (Passages 2/10 and 11), and the reference answer's claims about job scheduling, CPU/I/O utilization, rapid switching, and complexity are all supported by the retrieved context."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "analyze",
+        "answer_completeness": 4,
+        "notes": "The question asks students to compare and contrast two foundational OS concepts and draw implications for efficiency, which is analytically rich; the reference answer covers the key distinctions well but could be more precise about time-sharing mechanics and omits details like preemption and context-switching overhead."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "b3eda594-1910-4324-97f6-ab51f834954a",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-003",
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Caching\n26\nCaching \u2013 copying information into faster storage system\nImportant principle, performed at many levels in a computer (in hardware, operating system, software)\nInformation in use copied from slower to faster storage temporarily.",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.068005,
+        "seed_score_components": {
+          "prose": 8,
+          "density": 52,
+          "explan": 5,
+          "llm": 9
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the process of caching information in faster storage at multiple levels of a computer system relate to the need for cache coherency in a multiprocessor environment?",
+        "reference_answer": "Caching in faster storage allows quick access to frequently used data, but in a multiprocessor environment, ensuring that all CPUs have the most recent cached values is critical for maintaining data consistency and correctness.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.04477611940298507,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.9175
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "causal",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": false,
+        "notes": "The question asks how caching at multiple levels causes/necessitates cache coherency requirements, which is a causal relationship rather than a comparative one; both passages together support the answer, making complexity of 2 accurate."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "understand",
+        "answer_completeness": 3,
+        "notes": "The question meaningfully connects hierarchical caching to cache coherency, but the reference answer only superficially addresses the relationship without explaining the specific mechanisms (e.g., invalidation protocols, write-back vs. write-through) or why stale data across caches is problematic."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "e658145f-b453-47a1-96a5-c41c4b2af77b",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39-mm-drawing-010",
+          "doc-87c3044293e2a3b0920265c0b15f5c39-chunk-003"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# System Call Parameter Passing\n31\nSome system calls require additional information that is passed as parameters\nThree general methods used to pass parameters to the OS\nSimplest:  pass the parameters",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.066842,
+        "seed_score_components": {
+          "prose": 3,
+          "density": 45,
+          "explan": 2,
+          "llm": 19
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "What are the differences in methods for parameter passing to the operating system when the number of parameters exceeds the available registers, and how does this affect the way system calls are handled?",
+        "reference_answer": "When the number of parameters exceeds available registers, parameters can either be stored in a memory block, with the address passed in a register, or pushed onto a stack by the program and popped by the operating system. This affects system calls by allowing for more flexibility in the number of parameters that can be handled.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.12307692307692308,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.8425
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "Both passages together provide the necessary information to compare the two methods (memory block/table vs. stack) for parameter passing when registers are insufficient, and the answer is fully supported by the context."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 3,
+        "bloom_level": "understand",
+        "answer_completeness": 3,
+        "notes": "The question targets an important OS concept about system call parameter passing mechanisms, but the reference answer is somewhat superficial, mentioning the two approaches (memory block and stack) without elaborating on trade-offs, implementation details, or deeper implications for system call handling."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "356bb887-49b3-4664-8b14-356986440c2b",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-003",
+          "doc-38e16b32e7d6745e41cfef0778243c60-chunk-002"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# Operations on Processes\n24\nSystem must provide mechanisms for:\nProcess creation\nProcess termination\n\n# Process Creation\n25\nParent process create children processes, which in turn create other proces",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.06417,
+        "seed_score_components": {
+          "prose": 13,
+          "density": 25,
+          "explan": 59,
+          "llm": 6
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How does the process creation mechanism in an operating system, particularly the role of the fork() and exec() system calls, compare to the information structured within a Process Control Block in managing the child's state and resources?",
+        "reference_answer": "The process creation mechanism utilizes system calls like fork() to generate a new process and exec() to load a new program into that process, establishing a new execution context. In contrast, a Process Control Block houses information such as the child's state, CPU scheduling, and resource allocation, facilitating effective management and tracking of that process once it is created.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.03571428571428571,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.555
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": true,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "The question requires synthesizing information from two distinct passages\u2014one on fork()/exec() process creation and one on the PCB structure\u2014and comparing their roles, matching both the claimed 2-chunk retrieval complexity and comparative reasoning type."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "analyze",
+        "answer_completeness": 3,
+        "notes": "The question asks for a meaningful comparison between fork/exec mechanics and PCB structure, but the reference answer only superficially contrasts them without explaining how fork() copies the parent's PCB into the child, how exec() modifies the PCB's program counter and memory mappings, or the specific PCB fields (PID, parent PID, open file descriptors, etc.) that are initialized or altered during process creation."
+      },
+      "correctness": null,
+      "human_rating": null
+    },
+    {
+      "question_id": "3396a0bd-f025-4ea9-9c94-16fb933ba0d5",
+      "arm": "naive",
+      "difficulty": "medium",
+      "claimed_retrieval_complexity": 2,
+      "claimed_reasoning_type": "comparative",
+      "retrieval": {
+        "entities": [],
+        "relations": [],
+        "bfs_path": [],
+        "chunk_ids": [
+          "doc-791a303cacff97bbd42c3b498ac37980-chunk-001",
+          "doc-791a303cacff97bbd42c3b498ac37980-mm-drawing-004"
+        ],
+        "hop_depth": null,
+        "source_documents": [
+          "doc-87c3044293e2a3b0920265c0b15f5c39",
+          "doc-38e16b32e7d6745e41cfef0778243c60",
+          "doc-791a303cacff97bbd42c3b498ac37980"
+        ],
+        "seed_query": "# I/O Structure\n18\nTwo methods for handling I/O\nAfter I/O starts, control returns to user program only upon I/O completion\nWait instruction idles the CPU until the next interrupt\nWait loop (contention",
+        "seed_strategy": "chunk-pedagogical",
+        "seed_score": 0.067562,
+        "seed_score_components": {
+          "prose": 15,
+          "density": 7,
+          "explan": 17,
+          "llm": 16
+        }
+      },
+      "generation": {
+        "model": "gpt-4o-mini",
+        "prompt_template_id": "medium_v7",
+        "question": "How do the processes of spooling and buffering contribute to I/O handling in concurrent computing compared to the techniques of wait instructions and wait loops?",
+        "reference_answer": "Spooling and buffering enhance I/O handling by allowing data to be processed ahead of time and temporarily stored, thereby improving CPU utilization and system efficiency. In contrast, wait instructions and wait loops can block the CPU until I/O completion, potentially leading to poorer resource utilization during I/O operations.",
+        "figure_dependency_estimate": 0.0,
+        "source_lexical_overlap": 0.022222222222222223,
+        "retrieved_chunk_count": 2,
+        "clarity_heuristic": 0.8475
+      },
+      "verification": {
+        "model": "claude-sonnet-4-6",
+        "actual_retrieval_complexity": 2,
+        "actual_reasoning_type": "comparative",
+        "answerable_from_context": false,
+        "claimed_complexity_matches": true,
+        "claimed_reasoning_matches": true,
+        "notes": "While the context covers spooling and buffering briefly, it does not mention wait instructions or wait loops at all, making the reference answer not fully supportable from the provided context."
+      },
+      "pedagogy": {
+        "model": "claude-sonnet-4-6",
+        "pedagogical_value": 4,
+        "bloom_level": "analyze",
+        "answer_completeness": 3,
+        "notes": "The question asks for a meaningful comparative analysis of I/O handling techniques, but the reference answer is somewhat superficial and omits key distinctions such as how spooling decouples I/O from execution, how buffering smooths speed mismatches, and the specific differences between busy-waiting loops and blocking wait instructions."
+      },
+      "correctness": null,
+      "human_rating": null
+    }
+  ],
+  "metadata_path": "D:\\FYP\\LightRAG\\rag_storage\\quizzes\\0eaa8a6f-562b-49a8-84db-e18e9b68f50a.json",
+  "warnings": [],
+  "file_contributions": [
+    {
+      "doc_id": "doc-87c3044293e2a3b0920265c0b15f5c39",
+      "seed_count": 3,
+      "reason": "contributed"
+    },
+    {
+      "doc_id": "doc-38e16b32e7d6745e41cfef0778243c60",
+      "seed_count": 2,
+      "reason": "contributed"
+    },
+    {
+      "doc_id": "doc-791a303cacff97bbd42c3b498ac37980",
+      "seed_count": 5,
+      "reason": "contributed"
+    }
+  ],
+  "diversity": {
+    "mean_pairwise_similarity": 0.419749,
+    "max_pairwise_similarity": 0.601065,
+    "question_count": 10
+  }
+}
