@@ -103,7 +103,7 @@ api = [
 # Offline deployment dependencies (layered design for flexibility)
 offline-storage = [
     # Storage backend dependencies
-    "redis>=5.0.0,<8.0.0",
+    "redis>=5.0.0,<9.0.0",
     "neo4j>=5.0.0,<7.0.0",
     "pymilvus>=2.6.2,<4.0.0",
     "pymongo>=4.0.0,<5.0.0",
@@ -158,7 +158,7 @@ sampai = [
     # Only the storage backends SAMpai actually uses (not the full offline-storage set).
     "neo4j>=5.0.0,<7.0.0",               # graph store
     "qdrant-client>=1.11.0,<2.0.0",      # vector store
-    "redis>=5.0.0,<8.0.0",               # KV + doc status
+    "redis>=5.0.0,<9.0.0",               # KV + doc status
     "sqlalchemy[asyncio]>=2.0.0,<3.0.0",  # app DB ORM (async)
     "asyncpg>=0.31.0,<1.0.0",             # Postgres async driver (app DB + Neo4j? no — app DB)
     "alembic>=1.13.0,<2.0.0",             # app DB migrations
