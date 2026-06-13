@@ -1,6 +1,5 @@
 import { ChevronRight } from "lucide-react"
 import AnimatedList from "@/components/backgrounds/animated-list"
-import DotGrid from "@/components/backgrounds/dot-grid"
 import { cn } from "@/lib/utils"
 
 type Classroom = {
@@ -45,18 +44,6 @@ export function LeftPane({
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_40%_10%,color-mix(in_oklab,var(--chart-2),transparent_85%)_0%,transparent_60%)]"
       />
-
-      {/* Dot grid */}
-      <div className="absolute inset-0 -z-0 opacity-35 pointer-events-none">
-        <DotGrid
-          className="absolute inset-0 p-0 pointer-events-none"
-          dotSize={10}
-          gap={18}
-          baseColor="#334155"
-          activeColor="#64748b"
-          proximity={120}
-        />
-      </div>
 
       {/* Header */}
       <div className="relative z-10 flex items-center gap-2 px-4 py-4 border-b border-border">

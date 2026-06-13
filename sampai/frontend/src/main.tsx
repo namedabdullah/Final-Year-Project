@@ -34,6 +34,7 @@ const router = createBrowserRouter([
       { path: '/classroom/:id/folder/:folderId', element: <FolderPage /> },
       { path: '/classroom/:id/folder/:folderId/file/:fileId', element: <FilePage /> },
       { path: '/classroom/:id/folder/:folderId/cross-quiz', element: <CrossFileQuizPage /> },
+      { path: '/classroom/:id/folder/:folderId/cross-quiz/:quizId', element: <CrossFileQuizPage /> },
       { path: '/thread/:threadId', element: <GroupChatThreadPage /> },
     ],
   },

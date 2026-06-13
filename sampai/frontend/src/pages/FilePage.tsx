@@ -421,7 +421,7 @@ export default function FilePage() {
           </div>
 
           {/* Tab content panels */}
-          <div className="flex-1 min-h-0 px-4 pb-4">
+          <div className={`flex-1 min-h-0 ${activeTab === "mindmap" ? "px-0 pb-0" : "px-4 pb-4"}`}>
 
             {/* CHAT */}
             <div className={`h-full flex flex-col gap-3 ${activeTab === "chat" ? "flex" : "hidden"}`}>
@@ -549,8 +549,8 @@ export default function FilePage() {
             </div>
 
             {/* MINDMAP */}
-            <div className={`h-full rounded-2xl border border-border/40 bg-card/30 backdrop-blur-md overflow-hidden ${activeTab === "mindmap" ? "flex flex-col" : "hidden"}`}>
-              {fullReady ? (
+            <div className={`h-full overflow-hidden ${activeTab === "mindmap" ? "flex flex-col" : "hidden"}`}>
+              {activeTab === "mindmap" && fullReady ? (
                 <MindmapPanel fileId={fileIdNum} />
               ) : (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

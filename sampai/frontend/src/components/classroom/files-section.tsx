@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Upload, X, Loader2, Check, Trash2 } from "lucide-react"
+import { Check, Loader2, Trash2, Upload, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import File from "@/components/backgrounds/file"
 import Orb from "@/components/backgrounds/orb"

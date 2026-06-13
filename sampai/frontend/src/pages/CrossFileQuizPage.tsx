@@ -1,18 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
+  AlertTriangle,
   ArrowLeft,
   BrainCircuit,
   Check,
-  CheckSquare,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
   FileText,
-  Layers,
-  Square,
+  History,
+  Loader2,
+  Play,
+  RotateCcw,
+  Sparkles,
+  Trophy,
 } from "lucide-react"
 import { toast } from "sonner"
+import Squares from "@/components/backgrounds/squares"
+import File from "@/components/backgrounds/file"
 import ClassroomHeader from "@/components/classroom/header"
 import ClassroomSidebar from "@/components/classroom/sidebar"
 import { LoadingOrb } from "@/components/ui/liquid-orb-loader"
@@ -22,75 +27,227 @@ import {
   fileApi,
   folderApi,
   folderQuizApi,
-  type FileItem,
   type FolderQuizDetail,
+  type FolderQuizHistoryItem,
+  type FolderQuizHistoryResponse,
   type FolderQuizQuestionView,
 } from "@/api/sampai"
 import { useAuth } from "@/stores/auth"
-import type { Classroom, Folder } from "@/lib/types"
+import { useTheme } from "@/hooks/use-theme"
+import type { Classroom, FileItem, Folder } from "@/lib/types"
 
 type Difficulty = "auto" | "easy" | "medium" | "hard"
-type Stage = "select" | "generating" | "answering" | "done"
 
-// ── Score chip ────────────────────────────────────────────────────────────────
+const DIFFICULTIES: Difficulty[] = ["auto", "easy", "medium", "hard"]
 
-function ScoreChip({ score }: { score: number }) {
+function ScoreTone({ score }: { score: number }) {
+  const pct = Math.round(score * 100)
+  const cls =
+    pct >= 70
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+      : pct >= 40
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+        : "border-red-500/30 bg-red-500/10 text-red-500"
+
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${cls}`}>{pct}%</span>
+}
+
+function QuestionScore({ score }: { score: number }) {
   const pct = Math.round((score / 5) * 100)
   const cls =
     score >= 4
-      ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-400"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
       : score >= 2
-      ? "border-amber-400/40 bg-amber-500/15 text-amber-400"
-      : "border-red-400/40 bg-red-500/15 text-red-400"
+        ? "border-amber-500/35 bg-amber-500/10 text-amber-500"
+        : "border-red-500/35 bg-red-500/10 text-red-500"
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${cls}`}>
+      <Sparkles className="h-3 w-3" />
       {score}/5 · {pct}%
     </span>
   )
 }
 
-// ── File badge ────────────────────────────────────────────────────────────────
-
 function FileBadge({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border/40 bg-card/40 text-[11px] text-muted-foreground">
-      <FileText className="w-3 h-3 shrink-0" />
-      {name}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/50 bg-background/45 px-2 py-1 text-[11px] text-muted-foreground">
+      <FileText className="h-3 w-3 shrink-0" />
+      <span className="truncate">{name}</span>
     </span>
   )
 }
 
-// ── Question card ─────────────────────────────────────────────────────────────
+function FolderTabs({
+  active,
+  classroomId,
+  folderId,
+  navigate,
+}: {
+  active: "files" | "quiz"
+  classroomId: number
+  folderId: number
+  navigate: ReturnType<typeof useNavigate>
+}) {
+  return (
+    <div className="z-20 flex shrink-0 border-b border-border bg-background/80 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={() => navigate(`/classroom/${classroomId}/folder/${folderId}`)}
+        className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+          active === "files"
+            ? "border-violet-500 text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Files
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate(`/classroom/${classroomId}/folder/${folderId}/cross-quiz`)}
+        className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+          active === "quiz"
+            ? "border-violet-500 text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Cross-file quiz
+      </button>
+    </div>
+  )
+}
+
+function SelectableFileCard({
+  file,
+  selected,
+  onToggle,
+  color,
+}: {
+  file: FileItem
+  selected: boolean
+  onToggle: () => void
+  color: string
+}) {
+  const ready = file.processing_status === "completed"
+
+  return (
+    <button
+      type="button"
+      disabled={!ready}
+      onClick={onToggle}
+      className={`group relative flex min-h-[230px] flex-col items-center rounded-2xl border p-4 transition-all ${
+        ready
+          ? "cursor-pointer border-transparent hover:border-chart-1/25 hover:bg-card/35"
+          : "cursor-not-allowed border-transparent opacity-45"
+      } ${selected ? "border-emerald-500/35 bg-emerald-500/10" : ""}`}
+    >
+      <span
+        className={`absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
+          selected
+            ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_24px_rgba(16,185,129,0.35)]"
+            : ready
+              ? "border-border/60 bg-background/70 text-transparent group-hover:text-muted-foreground"
+              : "border-border/50 bg-background/50 text-muted-foreground"
+        }`}
+      >
+        {selected ? <Check className="h-4 w-4" /> : ready ? <Check className="h-4 w-4 opacity-0 group-hover:opacity-60" /> : null}
+      </span>
+
+      <div className="relative mb-2 flex h-[150px] w-full items-center justify-center overflow-visible">
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-chart-1/25 to-chart-2/25 opacity-0 blur-2xl transition-opacity group-hover:opacity-100" />
+        <div className={`relative z-10 transition-transform ${selected ? "scale-105" : "group-hover:scale-105"}`}>
+          <File color={color} size={1.4} className="cursor-pointer" />
+        </div>
+      </div>
+
+      <p className="line-clamp-2 min-h-[2.5rem] px-2 text-center text-sm font-semibold leading-tight tracking-wide text-foreground">
+        {file.filename}
+      </p>
+      <span
+        className={`mt-2 rounded-full border px-2.5 py-1 text-[11px] capitalize ${
+          ready
+            ? selected
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+              : "border-border/50 bg-card/45 text-muted-foreground"
+            : file.processing_status === "failed"
+              ? "border-red-500/30 bg-red-500/10 text-red-500"
+              : "border-border/50 bg-card/35 text-muted-foreground"
+        }`}
+      >
+        {ready ? (selected ? "Selected" : "Ready") : file.processing_status}
+      </span>
+    </button>
+  )
+}
+
+function HistoryCard({
+  item,
+  onOpen,
+}: {
+  item: FolderQuizHistoryItem
+  onOpen: () => void
+}) {
+  const done = item.status === "submitted"
+  const inProgress = item.status === "ready"
+  const generating = item.status === "pending" || item.status === "generating"
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-4 rounded-xl border border-border/50 bg-card/45 px-4 py-3 text-left backdrop-blur-sm transition hover:border-chart-1/30 hover:bg-card/65"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-background/50">
+        {done ? <Trophy className="h-5 w-5 text-amber-500" /> : <BrainCircuit className="h-5 w-5 text-chart-1" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+          <span className="capitalize">{item.difficulty}</span>
+          <span className="text-muted-foreground">·</span>
+          <span>{item.total_count || item.num_questions} questions</span>
+          <span className="text-muted-foreground">·</span>
+          <span>{item.n_files} files</span>
+        </span>
+        <span className="mt-1 block text-xs text-muted-foreground">
+          {done
+            ? "Completed quiz"
+            : inProgress
+              ? `In progress · ${item.graded_count}/${item.total_count} graded`
+              : generating
+                ? "Generating now"
+                : item.status}
+        </span>
+      </span>
+      {done && item.score != null && <ScoreTone score={item.score} />}
+      {!done && <span className="rounded-full border border-chart-1/30 bg-chart-1/10 px-2 py-0.5 text-xs text-chart-1">Resume</span>}
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+}
 
 function QuestionCard({
-  q,
+  question,
   index,
   total,
   onSubmit,
 }: {
-  q: FolderQuizQuestionView
+  question: FolderQuizQuestionView
   index: number
   total: number
   onSubmit: (questionId: string, answer: string) => Promise<void>
 }) {
-  const [draft, setDraft] = useState(q.user_answer ?? "")
+  const [answer, setAnswer] = useState(question.user_answer ?? "")
   const [submitting, setSubmitting] = useState(false)
-  const [showRef, setShowRef] = useState(false)
 
-  const scoreColor =
-    q.score == null
-      ? ""
-      : q.score >= 4
-      ? "border-emerald-500/30 bg-emerald-500/5"
-      : q.score >= 2
-      ? "border-amber-500/30 bg-amber-500/5"
-      : "border-red-500/30 bg-red-500/5"
+  useEffect(() => {
+    setAnswer(question.user_answer ?? "")
+  }, [question.id, question.user_answer])
 
-  async function handleSubmit() {
-    if (!draft.trim() || submitting) return
+  async function submit() {
+    if (submitting || question.submitted) return
     setSubmitting(true)
     try {
-      await onSubmit(q.id, draft.trim())
+      await onSubmit(question.id, answer)
     } finally {
       setSubmitting(false)
     }
@@ -100,272 +257,253 @@ function QuestionCard({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
-      className={`rounded-2xl border p-5 transition-colors ${
-        q.submitted ? scoreColor : "border-border/50 bg-card/30"
-      } backdrop-blur-sm`}
+      transition={{ delay: index * 0.03, duration: 0.25 }}
+      className={`rounded-2xl border p-5 backdrop-blur-sm ${
+        question.submitted ? "border-chart-1/25 bg-card/45" : "border-border/50 bg-card/35"
+      }`}
     >
-      {/* Question header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-muted-foreground/50">
-            Q{index + 1}/{total}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Q{index + 1}/{total}</span>
+          <span className="rounded-full border border-border/50 bg-background/45 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+            {question.reasoning_type?.replace(/_/g, " ") || "question"}
           </span>
-          <span className="text-[11px] px-2 py-0.5 rounded-full border border-border/40 bg-card/30 text-muted-foreground capitalize">
-            {q.reasoning_type?.replace(/_/g, " ")}
-          </span>
-          {q.hop_depth != null && q.hop_depth > 1 && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-chart-1/30 bg-chart-1/10 text-chart-1">
-              {q.hop_depth}-hop
+          {question.hop_depth != null && question.hop_depth > 1 && (
+            <span className="rounded-full border border-chart-1/30 bg-chart-1/10 px-2 py-0.5 text-[11px] text-chart-1">
+              {question.hop_depth}-hop
             </span>
           )}
         </div>
-        {q.submitted && q.score != null && <ScoreChip score={q.score} />}
+        {question.submitted && question.score != null && <QuestionScore score={question.score} />}
       </div>
 
-      {/* Source files */}
-      {q.source_file_names.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {q.source_file_names.map((name) => (
-            <FileBadge key={name} name={name} />
-          ))}
+      {question.source_file_names.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {question.source_file_names.map((name) => <FileBadge key={name} name={name} />)}
         </div>
       )}
 
-      {/* Question text */}
-      <p className="text-sm font-medium text-foreground leading-relaxed mb-4">{q.question}</p>
+      <p className="mb-4 text-sm font-medium leading-relaxed text-foreground">{question.question}</p>
 
-      {/* Answer area */}
-      {!q.submitted ? (
-        <div className="space-y-2.5">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={4}
-            placeholder="Type your answer here…"
-            className="w-full rounded-xl border border-border/50 bg-background/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-2 focus:ring-chart-1/40 resize-none"
-          />
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!draft.trim() || submitting}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <Check className="w-3.5 h-3.5" />
-            {submitting ? "Submitting…" : "Submit answer"}
-          </button>
+      {question.submitted ? (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-border/40 bg-background/45 px-3 py-2.5">
+            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Your answer</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
+              {question.user_answer?.trim() || <span className="text-muted-foreground">No answer given</span>}
+            </p>
+          </div>
+
+          {question.reference_answer && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5">
+              <p className="mb-1 text-[11px] uppercase tracking-wide text-emerald-500">Reference answer</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">{question.reference_answer}</p>
+            </div>
+          )}
+
+          {question.verdict && <p className="text-xs italic text-muted-foreground">{question.verdict}</p>}
+
+          {(question.missing.length > 0 || question.incorrect.length > 0) && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {question.missing.length > 0 && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5">
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-amber-500">Missing points</p>
+                  <ul className="ml-4 list-disc space-y-1 text-xs text-muted-foreground">
+                    {question.missing.map((item, i) => <li key={i}>{item}</li>)}
+                  </ul>
+                </div>
+              )}
+              {question.incorrect.length > 0 && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5">
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-red-500">Incorrect points</p>
+                  <ul className="ml-4 list-disc space-y-1 text-xs text-muted-foreground">
+                    {question.incorrect.map((item, i) => <li key={i}>{item}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Your answer */}
-          <div className="rounded-xl border border-border/30 bg-background/40 px-3 py-2.5">
-            <p className="text-[11px] text-muted-foreground/50 mb-1">Your answer</p>
-            <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{q.user_answer}</p>
-          </div>
-
-          {/* Verdict */}
-          {q.verdict && (
-            <p className="text-xs text-muted-foreground italic">{q.verdict}</p>
-          )}
-
-          {/* Missing / Incorrect points */}
-          {(q.missing.length > 0 || q.incorrect.length > 0) && (
-            <div className="space-y-1.5">
-              {q.missing.length > 0 && (
-                <div>
-                  <p className="text-[11px] text-amber-500/70 mb-0.5">Missing points</p>
-                  <ul className="space-y-0.5">
-                    {q.missing.map((m, i) => (
-                      <li key={i} className="text-xs text-muted-foreground/70 flex items-start gap-1.5">
-                        <span className="text-amber-500/50 mt-0.5">•</span>{m}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {q.incorrect.length > 0 && (
-                <div>
-                  <p className="text-[11px] text-red-500/70 mb-0.5">Incorrect points</p>
-                  <ul className="space-y-0.5">
-                    {q.incorrect.map((m, i) => (
-                      <li key={i} className="text-xs text-muted-foreground/70 flex items-start gap-1.5">
-                        <span className="text-red-500/50 mt-0.5">•</span>{m}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Reference answer (collapsible) */}
-          {q.reference_answer && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowRef((v) => !v)}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-              >
-                {showRef ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                {showRef ? "Hide" : "Show"} reference answer
-              </button>
-              {showRef && (
-                <div className="mt-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
-                  <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{q.reference_answer}</p>
-                </div>
-              )}
-            </div>
-          )}
+          <textarea
+            rows={4}
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+            placeholder="Write your answer..."
+            className="w-full resize-none rounded-xl border border-border/60 bg-background/65 px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-chart-1/35"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {submitting ? "Grading..." : "Submit answer"}
+          </button>
         </div>
       )}
     </motion.div>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function CrossFileQuizPage() {
-  const { id, folderId } = useParams<{ id: string; folderId: string }>()
+  const { id, folderId, quizId } = useParams<{ id: string; folderId: string; quizId?: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { theme } = useTheme()
 
   const classroomId = parseInt(id ?? "0", 10)
   const folderIdNum = parseInt(folderId ?? "0", 10)
+  const quizIdNum = quizId ? parseInt(quizId, 10) : null
+  const baseQuizPath = `/classroom/${classroomId}/folder/${folderIdNum}/cross-quiz`
 
-  // ── page data ──
   const [classroom, setClassroom] = useState<Classroom | null>(null)
   const [folder, setFolder] = useState<Folder | null>(null)
   const [files, setFiles] = useState<FileItem[]>([])
-  const [pageLoading, setPageLoading] = useState(true)
-  const [pageError, setPageError] = useState<string | null>(null)
+  const [history, setHistory] = useState<FolderQuizHistoryResponse | null>(null)
+  const [quiz, setQuiz] = useState<FolderQuizDetail | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [difficulty, setDifficulty] = useState<Difficulty>("auto")
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  const borderColor = theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+  const hoverFillColor = theme === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"
+  const fileColor = theme === "dark" ? "#93C5FD" : "#38BDF8"
+
+  const completedFiles = useMemo(() => files.filter((file) => file.processing_status === "completed"), [files])
+  const selectedCompletedCount = completedFiles.filter((file) => selectedIds.has(file.id)).length
+  const allSelected = completedFiles.length > 0 && selectedCompletedCount === completedFiles.length
+
+  const refreshHistory = useCallback(async () => {
+    const nextHistory = await folderQuizApi.history(folderIdNum)
+    setHistory(nextHistory)
+  }, [folderIdNum])
 
   useEffect(() => {
     if (!user) { navigate("/login"); return }
+    if (!classroomId || !folderIdNum || isNaN(classroomId) || isNaN(folderIdNum)) return
+
     const load = async () => {
+      setLoading(true)
+      setError(null)
       try {
-        const [cls, folders, fileList] = await Promise.all([
+        const [cls, folders, fileList, quizHistory] = await Promise.all([
           classroomApi.get(classroomId),
           folderApi.list(classroomId),
           fileApi.list(folderIdNum),
+          folderQuizApi.history(folderIdNum),
         ])
         setClassroom(cls)
-        const found = folders.find((f) => f.id === folderIdNum) ?? null
-        setFolder(found)
         setFiles(fileList)
-      } catch (e) {
-        const status = (e as { response?: { status?: number } })?.response?.status
+        setHistory(quizHistory)
+        const found = folders.find((item) => item.id === folderIdNum) ?? null
+        setFolder(found)
+        setSelectedIds(new Set(fileList.filter((file) => file.processing_status === "completed").map((file) => file.id)))
+        if (!found) setError("Folder not found")
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status
         if (status === 401) { logout(); navigate("/login") }
-        else setPageError(apiErrorDetail(e, "Failed to load folder."))
+        else setError(apiErrorDetail(err, "Failed to load cross-file quiz."))
       } finally {
-        setPageLoading(false)
+        setLoading(false)
       }
     }
+
     void load()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, classroomId, folderIdNum]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── quiz state ──
-  const [stage, setStage] = useState<Stage>("select")
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [difficulty, setDifficulty] = useState<Difficulty>("auto")
-  const [quizId, setQuizId] = useState<number | null>(null)
-  const [quiz, setQuiz] = useState<FolderQuizDetail | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pollStartRef = useRef(0)
-
-  // resume open quiz on mount (after files loaded)
-  const resumeChecked = useRef(false)
   useEffect(() => {
-    if (pageLoading || resumeChecked.current) return
-    resumeChecked.current = true
-    folderQuizApi.history(folderIdNum)
-      .then(async (h) => {
-        if (h.has_open_quiz && h.open_quiz_id != null) {
-          const detail = await folderQuizApi.get(h.open_quiz_id)
-          setQuizId(h.open_quiz_id)
-          setQuiz(detail)
-          if (detail.status === "ready") setStage("answering")
-          else if (detail.status === "submitted") setStage("done")
-          else if (detail.status === "pending" || detail.status === "generating") {
-            pollStartRef.current = Date.now(); setStage("generating")
-          }
-        }
-      })
-      .catch(() => {})
-  }, [pageLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!quizIdNum || Number.isNaN(quizIdNum)) {
+      setQuiz(null)
+      return
+    }
 
-  // poll while generating
-  useEffect(() => {
-    if (stage !== "generating" || quizId == null) return
-    const interval = setInterval(async () => {
-      if (Date.now() - pollStartRef.current > 180_000) {
-        clearInterval(interval)
-        toast.error("Quiz generation timed out. Please try again.")
-        setStage("select")
-        return
-      }
+    let cancelled = false
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    const loadQuiz = async () => {
       try {
-        const detail = await folderQuizApi.get(quizId)
+        const detail = await folderQuizApi.get(quizIdNum)
+        if (cancelled) return
         setQuiz(detail)
-        if (detail.status === "ready") { clearInterval(interval); setStage("answering") }
-        else if (detail.status === "failed") {
-          clearInterval(interval)
-          toast.error(detail.error_msg ?? "Generation failed.")
-          setStage("select")
+        if (detail.status === "failed") {
+          toast.error(detail.error_msg ?? "Quiz generation failed.")
         }
-      } catch {}
+      } catch (err) {
+        if (!cancelled) toast.error(apiErrorDetail(err, "Could not load quiz."))
+      }
+    }
+
+    void loadQuiz()
+    timer = setInterval(async () => {
+      try {
+        const detail = await folderQuizApi.get(quizIdNum)
+        if (cancelled) return
+        setQuiz(detail)
+        if (detail.status !== "pending" && detail.status !== "generating" && timer) {
+          clearInterval(timer)
+          timer = null
+          void refreshHistory()
+        }
+      } catch {
+        /* keep polling quietly */
+      }
     }, 2500)
-    return () => clearInterval(interval)
-  }, [stage, quizId])
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
+  }, [quizIdNum, refreshHistory])
 
-  // ── file selection ──
-  const completedFiles = files.filter((f) => f.processing_status === "completed")
+  const isOwner = !!(user && classroom && user.id === classroom.owner_id)
+  const handleLogout = () => { logout(); navigate("/login") }
 
-  const toggleFile = (id: number) => {
+  function toggleFile(fileId: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(fileId)) next.delete(fileId)
+      else next.add(fileId)
       return next
     })
   }
 
-  const allSelected = completedFiles.length > 0 && selectedIds.size === completedFiles.length
-  const toggleAll = () => {
-    if (allSelected) setSelectedIds(new Set())
-    else setSelectedIds(new Set(completedFiles.map((f) => f.id)))
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(completedFiles.map((file) => file.id)))
   }
 
-  // ── generate ──
-  async function handleGenerate() {
-    if (selectedIds.size === 0) return
+  async function generateQuiz() {
+    if (selectedCompletedCount === 0 || generating) return
+    setGenerating(true)
     try {
-      const body: Parameters<typeof folderQuizApi.generate>[1] = {
+      const response = await folderQuizApi.generate(folderIdNum, {
         file_ids: [...selectedIds],
         ...(difficulty !== "auto" && { difficulty }),
-      }
-      const res = await folderQuizApi.generate(folderIdNum, body)
-      setQuizId(res.quiz_id)
-      setQuiz(null)
-      pollStartRef.current = Date.now()
-      setStage("generating")
-    } catch (e) {
-      toast.error(apiErrorDetail(e, "Could not start quiz generation."))
+      })
+      await refreshHistory()
+      navigate(`${baseQuizPath}/${response.quiz_id}`)
+    } catch (err) {
+      toast.error(apiErrorDetail(err, "Could not start quiz generation."))
+    } finally {
+      setGenerating(false)
     }
   }
 
-  // ── submit a single question ──
   const submitQuestion = useCallback(async (questionId: string, answer: string) => {
-    if (!quizId) return
+    if (!quizIdNum) return
     try {
-      const res = await folderQuizApi.submitQuestion(quizId, questionId, answer)
+      const res = await folderQuizApi.submitQuestion(quizIdNum, questionId, answer)
       setQuiz((prev) => {
         if (!prev) return prev
-        const updatedQs = prev.questions.map((q) =>
-          q.id === questionId
+        const questions = prev.questions.map((question) =>
+          question.id === questionId
             ? {
-                ...q,
+                ...question,
                 submitted: true,
                 user_answer: answer,
                 score: res.score,
@@ -374,59 +512,57 @@ export default function CrossFileQuizPage() {
                 verdict: res.verdict,
                 reference_answer: res.reference_answer,
               }
-            : q,
+            : question,
         )
         return {
           ...prev,
-          questions: updatedQs,
+          questions,
           graded_count: res.graded_count,
           score: res.aggregate_score,
           correct_count: res.correct_count,
           status: res.finished ? "submitted" : prev.status,
         }
       })
-      if (res.finished) setStage("done")
-    } catch (e) {
-      toast.error(apiErrorDetail(e, "Could not submit answer."))
-      throw e
+      if (res.finished) void refreshHistory()
+    } catch (err) {
+      toast.error(apiErrorDetail(err, "Could not submit answer."))
+      throw err
     }
-  }, [quizId])
+  }, [quizIdNum, refreshHistory])
 
-  // ── helpers ──
-  const isOwner = !!(user && classroom && user.id === classroom.owner_id)
-  const handleLogout = () => { logout(); navigate("/login") }
-  const backToFolder = () => navigate(`/classroom/${classroomId}/folder/${folderIdNum}`)
-
-  // ── derived ──
-  const questions = quiz?.questions ?? []
-  const submittedCount = questions.filter((q) => q.submitted).length
-  const progressPct = questions.length > 0 ? (submittedCount / questions.length) * 100 : 0
-  const aggregateScore = quiz?.score != null ? Math.round(quiz.score * 100) : null
-
-  // ── loading / error states ──
-  if (pageLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen w-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <LoadingOrb size={96} />
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading cross-file quiz...</p>
         </div>
       </div>
     )
   }
 
-  if (pageError || !classroom || !folder) {
+  if (error || !classroom || !folder) {
     return (
       <div className="min-h-screen w-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-destructive">{pageError ?? "Folder not found"}</p>
-          <button onClick={backToFolder} className="px-4 py-2 rounded-md border border-border bg-card/50 hover:bg-card/70 cursor-pointer">
-            Back to Folder
+          <p className="text-destructive">{error || "Folder not found"}</p>
+          <button
+            type="button"
+            onClick={() => navigate(`/classroom/${classroomId}/folder/${folderIdNum}`)}
+            className="px-4 py-2 rounded-md border border-border bg-card/50 hover:bg-card/70 cursor-pointer"
+          >
+            Back to folder
           </button>
         </div>
       </div>
     )
   }
+
+  const questions = quiz?.questions ?? []
+  const answered = questions.filter((question) => question.submitted).length
+  const progress = questions.length ? (answered / questions.length) * 100 : 0
+  const aggregateScore = quiz?.score != null ? Math.round(quiz.score * 100) : null
+  const activeOpenQuiz = history?.items.find((item) => item.quiz_id === history.open_quiz_id)
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden bg-background">
@@ -435,7 +571,7 @@ export default function CrossFileQuizPage() {
         folderName={folder.name}
         classroomId={classroomId}
         username={user?.username ?? ""}
-        onMenuClick={() => setSidebarCollapsed((v) => !v)}
+        onMenuClick={() => setSidebarCollapsed((value) => !value)}
         onLogout={handleLogout}
       />
 
@@ -451,333 +587,309 @@ export default function CrossFileQuizPage() {
             sidebarCollapsed ? "ml-0" : "ml-[280px]"
           }`}
         >
-          <div className="max-w-3xl mx-auto w-full px-6 py-8">
+          <FolderTabs
+            active="quiz"
+            classroomId={classroomId}
+            folderId={folderIdNum}
+            navigate={navigate}
+          />
 
-            {/* Back + title */}
-            <div className="flex items-center gap-3 mb-8">
-              <button
-                type="button"
-                onClick={stage === "select" ? backToFolder : () => { setStage("select"); setQuiz(null); setQuizId(null) }}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                {stage === "select" ? "Back to folder" : "Start over"}
-              </button>
+          <div className="relative flex-1 overflow-hidden">
+            <div className="absolute inset-0 opacity-60 pointer-events-none z-0">
+              <Squares speed={0.5} squareSize={40} direction="diagonal" borderColor={borderColor} hoverFillColor={hoverFillColor} />
             </div>
-
-            <div className="flex items-center gap-3 mb-8">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl border border-border/40 bg-card/40">
-                <Layers className="w-5 h-5 text-chart-1" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Cross-File Quiz</h1>
-                <p className="text-xs text-muted-foreground/70">{folder.name}</p>
-              </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-
-              {/* ── SELECT stage ── */}
-              {stage === "select" && (
-                <motion.div
-                  key="select"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25 }}
-                  className="space-y-6"
-                >
-                  {/* File picker */}
-                  <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/30">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Select files</p>
-                        <p className="text-xs text-muted-foreground/60 mt-0.5">
-                          {completedFiles.length} completed · {selectedIds.size} selected
-                        </p>
+            <div className="relative z-10 h-full overflow-y-auto overflow-x-hidden">
+              {!quizIdNum ? (
+                <div className="mx-auto max-w-[1400px] px-4 pb-10 pt-10 sm:px-6 md:px-8">
+                  <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-chart-1/30 bg-chart-1/10 px-3 py-1 text-xs text-chart-1">
+                        <BrainCircuit className="h-3.5 w-3.5" />
+                        Folder-level synthesis
                       </div>
+                      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Cross-file quiz</h1>
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                        Select the completed files you want SAMpai to connect, choose a difficulty, then generate a quiz on its own page.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleAll}
+                      disabled={completedFiles.length === 0}
+                      className="rounded-xl border border-border/60 bg-card/55 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-card/75 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {allSelected ? "Deselect all" : "Select all ready files"}
+                    </button>
+                  </div>
+
+                  {activeOpenQuiz && (
+                    <div className="mb-8 rounded-2xl border border-chart-1/30 bg-card/65 p-4 backdrop-blur-xl">
+                      <div className="flex flex-wrap items-center gap-4">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-chart-1/30 bg-chart-1/10">
+                          <History className="h-5 w-5 text-chart-1" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground">You have a quiz in progress</p>
+                          <p className="text-xs text-muted-foreground">
+                            {activeOpenQuiz.graded_count}/{activeOpenQuiz.total_count} graded · {activeOpenQuiz.n_files} files
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`${baseQuizPath}/${activeOpenQuiz.quiz_id}`)}
+                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                        >
+                          Resume quiz
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <section>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-sm font-semibold text-foreground">Choose files</h2>
+                          <p className="text-xs text-muted-foreground">
+                            {completedFiles.length} ready · {selectedCompletedCount} selected
+                          </p>
+                        </div>
+                      </div>
+
+                      {files.length === 0 ? (
+                        <div className="rounded-2xl border border-border/50 bg-card/45 px-5 py-12 text-center text-sm text-muted-foreground">
+                          No files in this folder yet.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+                          {files.map((file) => (
+                            <SelectableFileCard
+                              key={file.id}
+                              file={file}
+                              selected={selectedIds.has(file.id)}
+                              onToggle={() => file.processing_status === "completed" && toggleFile(file.id)}
+                              color={fileColor}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+
+                    <aside className="space-y-5">
+                      <div className="rounded-2xl border border-border/50 bg-card/65 p-5 backdrop-blur-xl">
+                        <h2 className="text-sm font-semibold text-foreground">Difficulty</h2>
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          {DIFFICULTIES.map((item) => (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setDifficulty(item)}
+                              className={`rounded-xl border px-3 py-2 text-sm font-medium capitalize transition ${
+                                difficulty === item
+                                  ? "border-chart-1/60 bg-chart-1/15 text-foreground"
+                                  : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                          Auto adapts from your recent scores. Harder quizzes ask for deeper cross-file reasoning.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={generateQuiz}
+                          disabled={selectedCompletedCount === 0 || generating}
+                          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                          {generating ? "Starting..." : `Generate quiz (${selectedCompletedCount} files)`}
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/50 bg-card/55 p-5 backdrop-blur-xl">
+                        <div className="mb-4 flex items-center gap-2">
+                          <History className="h-4 w-4 text-chart-1" />
+                          <h2 className="text-sm font-semibold text-foreground">Past quizzes</h2>
+                        </div>
+                        {(history?.items ?? []).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Generated quizzes will appear here.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {history!.items.slice(0, 6).map((item) => (
+                              <HistoryCard
+                                key={item.quiz_id}
+                                item={item}
+                                onOpen={() => navigate(`${baseQuizPath}/${item.quiz_id}`)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-4xl px-4 pb-10 pt-10 sm:px-6 md:px-8">
+                  <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate(baseQuizPath)}
+                      className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-foreground"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back to cross-file quiz
+                    </button>
+                    {quiz?.status === "submitted" && (
                       <button
                         type="button"
-                        onClick={toggleAll}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-3 py-1.5 rounded-lg border border-border/40 hover:bg-card/50"
+                        onClick={() => navigate(baseQuizPath)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-card/55 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-card/75"
                       >
-                        {allSelected
-                          ? <><CheckSquare className="w-3.5 h-3.5" /> Deselect all</>
-                          : <><Square className="w-3.5 h-3.5" /> Select all</>}
+                        <RotateCcw className="h-4 w-4" />
+                        New quiz
                       </button>
-                    </div>
+                    )}
+                  </div>
 
-                    {files.length === 0 ? (
-                      <div className="px-5 py-10 text-center">
-                        <p className="text-sm text-muted-foreground">No files in this folder yet.</p>
+                  {!quiz || quiz.status === "pending" || quiz.status === "generating" ? (
+                    <div className="rounded-2xl border border-border/50 bg-card/55 px-6 py-20 text-center backdrop-blur-xl">
+                      <LoadingOrb size={92} />
+                      <p className="mt-5 text-sm font-semibold text-foreground">Generating your cross-file quiz...</p>
+                      <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">
+                        SAMpai is building questions from the selected files. This page will update automatically.
+                      </p>
+                    </div>
+                  ) : quiz.status === "failed" ? (
+                    <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 text-red-500" />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Generation failed</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{quiz.error_msg ?? "Please try again with a different selection."}</p>
+                        </div>
                       </div>
-                    ) : (
-                      <ul className="divide-y divide-border/20">
-                        {files.map((file) => {
-                          const ready = file.processing_status === "completed"
-                          const checked = selectedIds.has(file.id)
-                          return (
-                            <li key={file.id}>
-                              <button
-                                type="button"
-                                onClick={() => ready && toggleFile(file.id)}
-                                disabled={!ready}
-                                className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-                                  ready
-                                    ? "hover:bg-card/40 cursor-pointer"
-                                    : "opacity-45 cursor-not-allowed"
-                                } ${checked ? "bg-chart-1/5" : ""}`}
-                              >
-                                {/* Checkbox */}
-                                <div
-                                  className={`flex-none w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                                    checked
-                                      ? "border-chart-1 bg-chart-1"
-                                      : "border-border/60 bg-transparent"
-                                  }`}
-                                >
-                                  {checked && <Check className="w-2.5 h-2.5 text-white" />}
-                                </div>
-
-                                <FileText className="flex-none w-4 h-4 text-muted-foreground/60" />
-
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-foreground truncate">{file.filename}</p>
-                                </div>
-
-                                <span
-                                  className={`flex-none text-[11px] px-2 py-0.5 rounded-full border capitalize ${
-                                    ready
-                                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-500"
-                                      : file.processing_status === "failed"
-                                      ? "border-red-400/30 bg-red-500/10 text-red-500"
-                                      : "border-border/40 bg-card/20 text-muted-foreground"
-                                  }`}
-                                >
-                                  {ready ? "Ready" : file.processing_status}
-                                </span>
-                              </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Difficulty */}
-                  <div className="space-y-2.5">
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground/50 font-medium">Difficulty</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(["auto", "easy", "medium", "hard"] as Difficulty[]).map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => setDifficulty(d)}
-                          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer border ${
-                            difficulty === d
-                              ? "border-chart-1/60 bg-chart-1/20 text-foreground"
-                              : "border-border/40 bg-card/20 text-muted-foreground hover:border-border/60 hover:text-foreground"
-                          }`}
-                        >
-                          {d === "auto" ? "Auto" : d[0].toUpperCase() + d.slice(1)}
-                        </button>
-                      ))}
                     </div>
-                    {difficulty !== "auto" && (
-                      <p className="text-xs text-muted-foreground/50">
-                        {difficulty === "easy" && "Shallow BFS — direct, single-document questions."}
-                        {difficulty === "medium" && "Moderate BFS — some cross-file synthesis required."}
-                        {difficulty === "hard" && "Deep BFS — questions span multiple files with multi-hop reasoning."}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Generate button */}
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    disabled={selectedIds.size === 0}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <BrainCircuit className="w-4 h-4" />
-                    Generate quiz from {selectedIds.size} file{selectedIds.size !== 1 ? "s" : ""}
-                  </button>
-                </motion.div>
-              )}
-
-              {/* ── GENERATING stage ── */}
-              {stage === "generating" && (
-                <motion.div
-                  key="generating"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col items-center justify-center gap-5 py-24"
-                >
-                  <div className="flex gap-1.5 items-center">
-                    {[0, 1, 2].map((i) => (
-                      <motion.span
-                        key={i}
-                        className="block w-2.5 h-2.5 rounded-full bg-chart-1/70"
-                        animate={{ y: [0, -8, 0] }}
-                        transition={{ duration: 0.9, delay: i * 0.18, repeat: Infinity, ease: "easeInOut" }}
-                      />
-                    ))}
-                  </div>
-                  <div className="text-center space-y-1">
-                    <p className="text-sm font-medium text-foreground">Generating cross-file quiz…</p>
-                    <p className="text-xs text-muted-foreground/60">
-                      SAMpai is drawing connections across your selected files. This may take a minute.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ── ANSWERING stage ── */}
-              {stage === "answering" && quiz && (
-                <motion.div
-                  key="answering"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-5"
-                >
-                  {/* Progress header */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <span className="capitalize">{quiz.difficulty} quiz</span>
-                        {quiz.files.length > 0 && (
-                          <span className="text-muted-foreground/50">· {quiz.files.length} file{quiz.files.length !== 1 ? "s" : ""}</span>
-                        )}
-                      </span>
-                      <span>{submittedCount} / {questions.length} answered</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-border/30 overflow-hidden">
-                      <div
-                        className="h-full bg-chart-1/60 rounded-full transition-all duration-500"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* File contributions */}
-                  {quiz.files.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {quiz.files.map((f) => (
-                        <span
-                          key={f.filename}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-border/40 bg-card/30 text-[11px] text-muted-foreground"
-                        >
-                          <FileText className="w-3 h-3" />
-                          {f.filename}
-                          <span className="text-muted-foreground/40 ml-0.5">·{f.seed_count}</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Questions */}
-                  <div className="space-y-4">
-                    {questions.map((q, i) => (
-                      <QuestionCard
-                        key={q.id}
-                        q={q}
-                        index={i}
-                        total={questions.length}
-                        onSubmit={submitQuestion}
-                      />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ── DONE stage ── */}
-              {stage === "done" && quiz && (
-                <motion.div
-                  key="done"
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-6"
-                >
-                  {/* Score card */}
-                  <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm p-6 text-center space-y-3">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl border border-border/40 bg-card/40 mb-1">
-                      <BrainCircuit className="w-7 h-7 text-chart-1" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Quiz complete</p>
-                    {aggregateScore != null ? (
-                      <p
-                        className={`text-4xl font-bold ${
-                          aggregateScore >= 70
-                            ? "text-emerald-500"
-                            : aggregateScore >= 40
-                            ? "text-amber-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {aggregateScore}%
-                      </p>
-                    ) : (
-                      <p className="text-4xl font-bold text-muted-foreground">—</p>
-                    )}
-                    <p className="text-xs text-muted-foreground/70">
-                      {quiz.correct_count ?? submittedCount} of {questions.length} questions answered
-                    </p>
-                  </div>
-
-                  {/* Per-file scores */}
-                  {quiz.topic_scores.length > 0 && (
-                    <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm overflow-hidden">
-                      <p className="text-xs font-medium text-muted-foreground/60 px-5 py-3 border-b border-border/30 uppercase tracking-wider">
-                        Per-file breakdown
-                      </p>
-                      <ul className="divide-y divide-border/20">
-                        {quiz.topic_scores.map((ts) => {
-                          const pct = Math.round(ts.mean_score * 100)
-                          return (
-                            <li key={ts.filename} className="flex items-center gap-3 px-5 py-3">
-                              <FileText className="w-4 h-4 text-muted-foreground/40 flex-none" />
-                              <span className="flex-1 text-sm text-foreground truncate">{ts.filename}</span>
-                              <span className="text-xs text-muted-foreground/60">
-                                {ts.question_count} Q{ts.question_count !== 1 ? "s" : ""}
-                              </span>
-                              <span
-                                className={`text-sm font-semibold ${
-                                  pct >= 70 ? "text-emerald-500" : pct >= 40 ? "text-amber-500" : "text-red-500"
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="rounded-2xl border border-border/50 bg-card/55 p-5 backdrop-blur-xl">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-chart-1/30 bg-chart-1/10 px-3 py-1 text-xs capitalize text-chart-1">
+                              <BrainCircuit className="h-3.5 w-3.5" />
+                              {quiz.difficulty} quiz
+                            </div>
+                            <h1 className="text-xl font-semibold text-foreground">
+                              {quiz.status === "submitted" ? "Quiz complete" : "Answer the questions"}
+                            </h1>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {quiz.files.length} files · {answered}/{questions.length} answered
+                            </p>
+                          </div>
+                          {quiz.status === "submitted" && aggregateScore != null && (
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Score</p>
+                              <p
+                                className={`text-4xl font-bold ${
+                                  aggregateScore >= 70
+                                    ? "text-emerald-500"
+                                    : aggregateScore >= 40
+                                      ? "text-amber-500"
+                                      : "text-red-500"
                                 }`}
                               >
-                                {pct}%
-                              </span>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                                {aggregateScore}%
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/40">
+                          <div className="h-full rounded-full bg-chart-1 transition-all duration-500" style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+
+                      {(quiz.warnings ?? []).length > 0 && (
+                        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              {quiz.warnings.map((warning, index) => <p key={index}>{warning}</p>)}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {quiz.files.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {quiz.files.map((file) => (
+                            <FileBadge key={`${file.file_id}-${file.filename}`} name={file.filename} />
+                          ))}
+                        </div>
+                      )}
+
+                      {quiz.status === "submitted" && quiz.topic_scores.length > 0 && (
+                        <div className="rounded-2xl border border-border/50 bg-card/55 backdrop-blur-xl">
+                          <p className="border-b border-border/40 px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Performance by file
+                          </p>
+                          <div className="space-y-3 p-5">
+                            {quiz.topic_scores.map((topic) => {
+                              const pct = Math.round(topic.mean_score * 100)
+                              return (
+                                <div key={`${topic.file_id}-${topic.filename}`}>
+                                  <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                                    <span className="min-w-0 truncate text-foreground">{topic.filename}</span>
+                                    <span className="shrink-0 text-muted-foreground">
+                                      {pct}% · {topic.correct_count}/{topic.question_count}
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 overflow-hidden rounded-full bg-border/40">
+                                    <div
+                                      className={`h-full rounded-full ${pct >= 70 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-red-500"}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        {questions.map((question, index) => (
+                          <QuestionCard
+                            key={question.id}
+                            question={question}
+                            index={index}
+                            total={questions.length}
+                            onSubmit={submitQuestion}
+                          />
+                        ))}
+                      </div>
+
+                      {quiz.status === "submitted" && (
+                        <div className="rounded-2xl border border-border/50 bg-card/55 p-5 text-center backdrop-blur-xl">
+                          <Trophy className="mx-auto h-8 w-8 text-amber-500" />
+                          <p className="mt-3 text-sm font-semibold text-foreground">Nice, this quiz is saved.</p>
+                          <p className="mt-1 text-xs text-muted-foreground">Return to the cross-file quiz page to start another one or revisit past attempts.</p>
+                          <button
+                            type="button"
+                            onClick={() => navigate(baseQuizPath)}
+                            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                          >
+                            Back to cross-file quiz
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  {/* Actions */}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => { setStage("select"); setQuiz(null); setQuizId(null); setSelectedIds(new Set()) }}
-                      className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[var(--chart-1)] to-[var(--chart-2)] text-sm font-medium text-white hover:opacity-90 transition-opacity cursor-pointer"
-                    >
-                      New quiz
-                    </button>
-                    <button
-                      type="button"
-                      onClick={backToFolder}
-                      className="px-5 py-2.5 rounded-xl border border-border/40 bg-card/30 text-sm text-foreground hover:bg-card/50 cursor-pointer transition-colors"
-                    >
-                      Back to folder
-                    </button>
-                  </div>
-                </motion.div>
+                </div>
               )}
-
-            </AnimatePresence>
+            </div>
           </div>
         </main>
       </div>

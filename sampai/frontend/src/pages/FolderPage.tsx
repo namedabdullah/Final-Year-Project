@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { Layers } from "lucide-react"
 import Squares from "@/components/backgrounds/squares"
 import { classroomApi, folderApi } from "@/api/sampai"
 import { useAuth } from "@/stores/auth"
@@ -106,6 +105,22 @@ export default function FolderPage() {
             sidebarCollapsed ? "ml-0" : "ml-[280px]"
           }`}
         >
+          <div className="z-20 flex shrink-0 border-b border-border bg-background/80 backdrop-blur-sm">
+            <button
+              type="button"
+              className="px-5 py-2.5 text-sm font-medium transition-colors border-b-2 border-violet-500 text-foreground"
+            >
+              Files
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/classroom/${classroomId}/folder/${folderIdNum}/cross-quiz`)}
+              className="px-5 py-2.5 text-sm font-medium transition-colors border-b-2 border-transparent text-muted-foreground hover:text-foreground"
+            >
+              Cross-file quiz
+            </button>
+          </div>
+
           <div className="relative flex-1 overflow-hidden">
             <div className="absolute inset-0 opacity-60 pointer-events-none z-0">
               <Squares speed={0.5} squareSize={40} direction="diagonal" borderColor={borderColor} hoverFillColor={hoverFillColor} />
