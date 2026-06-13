@@ -72,6 +72,18 @@ from lightrag.kg.shared_storage import (
 from fastapi.security import OAuth2PasswordRequestForm
 from lightrag.api.auth import auth_handler
 
+# --- SAMpai ---
+# Fail-soft graft of the SAMpai classroom layer. If the subpackage or its optional
+# dependencies are missing, the original LightRAG server boots unchanged.
+try:
+    from lightrag.api.sampai import mount_sampai, sampai_startup, sampai_shutdown
+
+    _SAMPAI_AVAILABLE = True
+except Exception as _sampai_exc:  # optional extension / deps
+    _SAMPAI_AVAILABLE = False
+    logger.warning(f"SAMpai extension not loaded: {_sampai_exc}")
+# --- end SAMpai ---
+
 # use the .env that is inside the current folder
 # allows to use different .env file for each lightrag instance
 # the OS environment variables take precedence over the .env file
@@ -817,11 +829,21 @@ def create_app(args):
             # Data migration regardless of storage implementation
             await rag.check_and_migrate_data()
 
+            # --- SAMpai ---
+            if _SAMPAI_AVAILABLE:
+                await sampai_startup(app, args, embedding_func, config_cache, rag)
+            # --- end SAMpai ---
+
             ASCIIColors.green("\nServer is ready to accept connections! 🚀\n")
 
             yield
 
         finally:
+            # --- SAMpai ---
+            if _SAMPAI_AVAILABLE:
+                await sampai_shutdown(app)
+            # --- end SAMpai ---
+
             # Clean up database connections
             await rag.finalize_storages()
 
@@ -2018,6 +2040,13 @@ def create_app(args):
     # Add Ollama API routes
     ollama_api = OllamaAPI(rag, top_k=args.top_k, api_key=api_key)
     app.include_router(ollama_api.router, prefix="/api")
+
+    # --- SAMpai ---
+    if _SAMPAI_AVAILABLE:
+        mount_sampai(
+            app, args=args, embedding_func=embedding_func, config_cache=config_cache
+        )
+    # --- end SAMpai ---
 
     # Custom Swagger UI endpoint for offline support
     @app.get("/docs", include_in_schema=False)

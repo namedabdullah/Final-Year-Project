@@ -1,0 +1,144 @@
+# The Learning SAMpai — full stack.
+#
+# Profiles:
+#   data    — postgres, neo4j, qdrant, redis (the persistent stores)
+#   parsing — docling, mineru (document parsers)
+#   app     — api (modified LightRAG server), web (our SPA via nginx)
+#
+# Full demo:   docker compose --profile data --profile parsing --profile app up
+# GPU MinerU:  add  -f docker-compose.yml -f docker-compose.mineru-gpu.yml
+#              (the mineru-autoselect script emits the right -f flags + backend env)
+#
+# Hostnames below are in-network service names (api talks to neo4j:7687 etc.).
+# For host-side dev (api/web on the host) use docker-compose.dev.yml instead.
+
+name: sampai
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["data"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sampai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sampai}
+      POSTGRES_DB: ${POSTGRES_DB:-sampai}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sampai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    profiles: ["data"]
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-please-change}
+      NEO4J_PLUGINS: '["apoc"]'
+    ports: ["7474:7474", "7687:7687"]
+    volumes: ["neo4jdata:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    profiles: ["data"]
+    ports: ["6333:6333"]
+    volumes: ["qdrantdata:/qdrant/storage"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["data"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  docling:
+    image: ${DOCLING_IMAGE:-ghcr.io/docling-project/docling-serve-cpu:main}
+    profiles: ["parsing"]
+    ports: ["5001:5001"]
+    environment:
+      DOCLING_SERVE_PORT: "5001"
+    volumes: ["doclingcache:/root/.cache"]
+    restart: unless-stopped
+
+  mineru:
+    # Pinned to the CPU mineru-api build already in use on this machine
+    #   (`mineru-cpu:latest`, the `pipeline` backend — no GPU needed).
+    #   For a GPU box: set MINERU_IMAGE=<sglang/vllm build> + use the GPU overlay,
+    #   and the probe writes MINERU_LOCAL_BACKEND=hybrid-auto-engine.
+    image: ${MINERU_IMAGE:-mineru-cpu:latest}
+    profiles: ["parsing"]
+    ports: ["8000:8000"]
+    env_file:
+      - path: ./mineru.generated.env   # written by mineru-autoselect (backend + image-analysis)
+        required: false
+    volumes: ["mineru_models:/root/.cache"]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..                      # repo root (needs lightrag/ + pyproject.toml)
+      dockerfile: sampai/docker/Dockerfile.api
+    profiles: ["app"]
+    env_file:
+      - path: ../../.env
+        required: false
+      - path: ./mineru.generated.env
+        required: false
+    environment:
+      WORKING_DIR: /data/ragworkdir
+    ports: ["9621:9621"]
+    volumes: ["ragworkdir:/data/ragworkdir"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      qdrant: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      docling: { condition: service_started }
+      mineru: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9621/api/sampai/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: on-failure
+
+  web:
+    build:
+      context: ..                          # the sampai/ dir (frontend/ + docker/nginx.conf)
+      dockerfile: docker/Dockerfile.web
+    profiles: ["app"]
+    ports: ["8080:80"]
+    depends_on:
+      api: { condition: service_started }
+    restart: on-failure
+
+volumes:
+  pgdata:
+  neo4jdata:
+  qdrantdata:
+  redisdata:
+  doclingcache:
+  mineru_models:
+  ragworkdir:

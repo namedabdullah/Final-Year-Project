@@ -1,0 +1,30 @@
+# The modified LightRAG server (with the SAMpai graft). Build context = repo root.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    WORKING_DIR=/data/ragworkdir
+
+WORKDIR /app
+
+# Build tooling for native wheels (asyncpg, argon2, etc.) + curl for healthcheck.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Package metadata + source. README is referenced by pyproject (readme=...).
+COPY pyproject.toml README.md ./
+COPY lightrag/ ./lightrag/
+
+# Install the server + storage backends + the SAMpai extras group.
+RUN pip install ".[sampai]"
+
+RUN mkdir -p /data/ragworkdir
+ENV HOST=0.0.0.0 PORT=9621 WORKERS=1
+EXPOSE 9621
+
+# Use the console-script entrypoint (its main() parses config then runs uvicorn
+# single-worker internally). NOTE: do NOT use `uvicorn ...:app` — importing the
+# module triggers LightRAG's argparse, which rejects uvicorn's CLI args.
+# 1 worker — the SAMpai engine registry + WS hub are in-process (see sampai-plan §8).
+CMD ["lightrag-server"]
