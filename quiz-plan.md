@@ -114,6 +114,13 @@ For all modes, the prompt sent to the generator enforces the reasoning type. Pro
 - **Medium:** comparative reasoning, synthesis across at least 2 context pieces.
 - **Hard:** causal / inferential / analytical reasoning, synthesis across at least 3 context pieces, no direct fact lookup.
 
+> **Prompt revision (2026-05-28)**: Prompts were updated from v1 → v2 to
+> add explicit anti-pattern guidance against diagram-label and table-cell
+> extraction. The revision is recorded in `quiz-fix-plan.md` and reflected
+> in `claude_review_rag_framework.md` §Easy/Medium/Hard Prompts. Quiz
+> records produced before this date keep their `easy_v1`/`medium_v1`/
+> `hard_v1` tags for traceability.
+
 ### 3.4 Seed query
 
 The retrieval pipeline needs a "seed query" to bootstrap keyword extraction / entity-vdb lookup / chunk search. For the quiz feature there's no user-typed query — so we synthesize seed queries internally:

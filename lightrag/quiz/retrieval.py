@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Set
 
 from lightrag.constants import GRAPH_FIELD_SEP
+from lightrag.quiz.artifacts import is_artifact_id, redact_instance_labels
 
 if TYPE_CHECKING:
     from lightrag import LightRAG
@@ -54,34 +55,116 @@ class RetrievalContext:
         return not self.chunks and not self.entities
 
     def format_for_prompt(self) -> str:
-        """Serialize context to a string suitable for an LLM prompt."""
+        """Serialize context for the generator using a pedagogical layout.
+
+        The previous format emitted a graph-database-style listing
+        (``=== Entities ===``, ``=== Relations ===``, arrow notation) that
+        encouraged extractive questions because the generator was being
+        handed a graph, not a teaching outline. This version reformats the
+        same retrieval into three pedagogical sections:
+
+          - **Key concepts**: concept-entity descriptions with instance
+            labels redacted (``Thread 1`` → ``{thread}``, ``P1`` →
+            ``{process}``, etc.).
+          - **Conceptual relationships**: relation descriptions, redacted.
+          - **Supporting context**: prose chunks, redacted.
+
+        Structural artifacts (``tb-…``, ``im-…``, ``mm-…`` entities and
+        relations whose description is "associated with table/drawing in
+        section…") are filtered out *before* the truncation cap so the cap
+        reflects kept content, not raw count.
+
+        An earlier version (R3) prepended a ``=== Topic ===`` line
+        derived from source filenames. It was removed in R4 because
+        GPT-4o-mini was generating meta-questions about the *documents*
+        themselves (e.g. "What types of documents are covered?") rather
+        than the subject matter — see ``quiz-caaf0e4a-…`` for evidence.
+
+        Applied identically to mix-arm and naive-arm retrieval — the only
+        permitted asymmetry between the arms is in retrieval itself.
+        """
         parts: list[str] = []
 
-        if self.entities:
-            parts.append("=== Entities ===")
-            for e in self.entities[:20]:  # cap for token budget
-                name = e.get("entity_name", e.get("id", "?"))
+        # ---- Key concepts ----
+        concept_entities = [
+            e for e in self.entities
+            if not is_artifact_id(e.get("entity_name", ""))
+        ]
+        if concept_entities:
+            parts.append("\n=== Key concepts ===")
+            for e in concept_entities[:20]:
+                raw_name = e.get("entity_name", e.get("id", "?"))
                 desc = e.get("description", "")
+                name = redact_instance_labels(raw_name)
+                desc = redact_instance_labels(desc)
                 parts.append(f"- {name}: {desc}" if desc else f"- {name}")
 
-        if self.relations:
-            parts.append("\n=== Relations ===")
-            for r in self.relations[:20]:
-                src = r.get("source", "?")
-                tgt = r.get("target", "?")
-                rel = r.get("type", r.get("relation", "relates_to"))
-                parts.append(f"- {src} --[{rel}]--> {tgt}")
+        # ---- Conceptual relationships ----
+        concept_relations = [r for r in self.relations if not _is_structural_relation(r)]
+        if concept_relations:
+            parts.append("\n=== Conceptual relationships ===")
+            for r in concept_relations[:20]:
+                rel_text = self._format_relation(r)
+                if rel_text:
+                    parts.append(f"- {rel_text}")
 
+        # ---- Supporting context ----
         if self.chunks:
-            parts.append("\n=== Text Chunks ===")
-            for i, c in enumerate(self.chunks[:10]):  # cap for token budget
+            parts.append("\n=== Supporting context ===")
+            for i, c in enumerate(self.chunks[:10]):
                 content = c.get("content", c.get("text", ""))
-                parts.append(f"[Chunk {i+1}]\n{content[:1500]}")
+                redacted = redact_instance_labels(content[:1500])
+                parts.append(f"[Passage {i+1}]\n{redacted}")
 
         if not parts:
             return "(no context retrieved)"
 
         return "\n".join(parts)
+
+    @staticmethod
+    def _format_relation(r: dict) -> str:
+        """Render a relation as a redacted conceptual sentence.
+
+        Prefers the relation's natural-language ``description`` field;
+        falls back to an arrow representation when no description is
+        recorded. Instance labels are redacted in both forms so the
+        generator can't latch onto specific labels.
+        """
+        desc = (r.get("description") or "").strip()
+        if desc:
+            return redact_instance_labels(desc)
+        src = r.get("source", "?")
+        tgt = r.get("target", "?")
+        rel = r.get("type", r.get("relation", "relates to"))
+        return redact_instance_labels(f"{src} {rel} {tgt}")
+
+
+# ---------------------------------------------------------------------------
+# Structural-relation detection (for pedagogical formatter)
+# ---------------------------------------------------------------------------
+
+
+_STRUCTURAL_DESC_FRAGMENTS = (
+    "associated with table",
+    "associated with drawing",
+    "contained in section",
+)
+
+
+def _is_structural_relation(r: dict) -> bool:
+    """True for relations that describe document structure, not concepts.
+
+    The KG extractor emits relations like *"X is associated with table Y in
+    section Z of document foo.pptx"* — these anchor entities to multimodal
+    artifacts and are useless (worse, harmful) as pedagogical context.
+    Drop them before the prompt sees them.
+    """
+    desc = (r.get("description") or "").lower()
+    if any(p in desc for p in _STRUCTURAL_DESC_FRAGMENTS):
+        return True
+    if is_artifact_id(r.get("source", "")) or is_artifact_id(r.get("target", "")):
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -110,15 +193,31 @@ def _entity_node_in_scope(node_data: dict, scope_chunk_ids: Set[str]) -> bool:
 async def _get_scope_chunk_ids(rag: "LightRAG", scope_doc_ids: Set[str]) -> Set[str]:
     """Build the set of chunk IDs that belong to the given document IDs.
 
-    Uses a broad query with top_k=500 to approximate coverage.
-    This is an approximation for Phase 3; Phase 7+ can enumerate properly.
+    Reads ``chunks_list`` directly from ``doc_status`` (deterministic).
+    The previous broad-query approach returned an empty set on real
+    corpora because stop-word embeddings don't reliably surface in-scope
+    chunks — see the matching helper in ``lightrag/quiz/seeds.py``.
     """
-    try:
-        results = await rag.chunks_vdb.query("the", top_k=500)
-        return {c["id"] for c in results if c.get("full_doc_id") in scope_doc_ids}
-    except Exception as exc:
-        logger.warning("_get_scope_chunk_ids: chunks_vdb query failed: %s", exc)
-        return set()
+    chunk_ids: Set[str] = set()
+    for doc_id in scope_doc_ids:
+        try:
+            status = await rag.doc_status.get_by_id(doc_id)
+        except Exception as exc:
+            logger.warning(
+                "_get_scope_chunk_ids: doc_status.get_by_id(%s) failed: %s",
+                doc_id,
+                exc,
+            )
+            continue
+        if not status:
+            continue
+        chunks_list = (
+            status.get("chunks_list") if isinstance(status, dict)
+            else getattr(status, "chunks_list", None)
+        )
+        if chunks_list:
+            chunk_ids.update(c for c in chunks_list if c)
+    return chunk_ids
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +261,13 @@ async def _bfs_subgraph(
             for src, tgt in edges:
                 neighbor = tgt if src == node else src
                 if neighbor in visited:
+                    continue
+
+                # Defence-in-depth: skip multimodal anchor IDs entirely so
+                # they don't pollute the entity list or bfs_path metadata.
+                # The format_for_prompt filter would catch them too, but
+                # cleaning them here keeps the BFS path readable.
+                if is_artifact_id(neighbor):
                     continue
 
                 # Scope check: node must have source chunks within scope
@@ -250,6 +356,15 @@ async def retrieve_mix_arm(
     except Exception as exc:
         logger.warning("retrieve_mix_arm: entities_vdb.query failed: %s", exc)
         entry_results = []
+
+    # Drop multimodal-anchor synthetic entities (tb-/im-/mm-…) from the
+    # entry-point pool before scoping or capping. Without this, an artifact
+    # entity ranked highly by the entity VDB ends up as a BFS start node
+    # and pollutes the bfs_path metadata even though the BFS-expansion
+    # filter would have rejected it as a neighbour.
+    entry_results = [
+        e for e in entry_results if not is_artifact_id(e.get("entity_name", ""))
+    ]
 
     # Filter to in-scope entities only
     if scope_chunk_ids:

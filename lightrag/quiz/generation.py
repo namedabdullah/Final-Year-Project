@@ -35,12 +35,136 @@ REASONING_TYPE = {
 }
 
 PROMPT_TEMPLATE_IDS = {
-    "easy": "easy_v1",
-    "medium": "medium_v1",
-    "hard": "hard_v1",
+    "easy": "easy_v7",
+    "medium": "medium_v7",
+    "hard": "hard_v7",
 }
 
-# Full user-turn prompts from claude_review_rag_framework.md
+# Shared "Avoid" block — appended to every difficulty's template. Concept-
+# oriented production constraints: refuses diagram-label questions, table-cell
+# extraction, figure-dependent shapes, and fabricated numeric specifics.
+# Records the v2 revision (see claude_review_rag_framework.md §Easy/Medium/Hard
+# Prompts).
+_AVOID_BLOCK = (
+    "Avoid (CRITICAL — ALL of the following are HARD rules):\n"
+    # Rule 1: placeholders. Moved to top in R4 because LLMs anchor on early
+    # items. Doubled braces below are stripped by str.format() so the LLM
+    # sees the literal "{thread}", "{process}", etc.
+    "- ABSOLUTE RULE — NO BRACE CHARACTERS IN OUTPUT: The retrieved context "
+    "contains placeholder tokens like {{thread}}, {{process}}, {{cpu_core}}, "
+    "{{memory_page}}, {{memory_frame}}, and {{semaphore}}. These are concept-slot "
+    "markers, NOT real words. If your question OR reference_answer contains "
+    "ANY brace character ({{ or }}), you have FAILED the task. Always rewrite "
+    "in natural English. Example of FAILURE: \"What is the burst time of "
+    "{{process}}?\". Example of SUCCESS: \"What does burst time measure for "
+    "a process?\".\n"
+    # Rule 2: anti-tautology — new in R4 to catch the "embedded OS for embedded
+    # systems" failure mode seen in quiz-caaf0e4a Q6.
+    "- ABSOLUTE RULE — NO TAUTOLOGIES: The reference_answer must not just "
+    "restate the question. Example of FAILURE: Q=\"What kind of OS is "
+    "designed for embedded systems?\" A=\"An embedded OS designed for embedded "
+    "systems.\" A correct question requires genuine information to answer.\n"
+    # Rule 3: anti-meta — new in R4 to catch "What documents are covered?"
+    # failures from quiz-caaf0e4a.
+    "- Do NOT ask meta-questions about the source material itself (e.g. "
+    "\"What documents are covered?\", \"What does the material describe?\", "
+    "\"How many documents are in the study?\"). Ask about the SUBJECT MATTER "
+    "(operating systems, threads, scheduling, …), not about the documents.\n"
+    "- Do NOT ask about diagram labels, table cell values, figure identifiers, "
+    "or instance names (e.g., \"P1\", \"Thread A\", \"core 3\", \"CPU_7\", \"Page 3\").\n"
+    "- Do NOT ask \"what is the label of…\" or \"what is the name of the … in the diagram\".\n"
+    "- Reference the underlying concept (e.g., \"process\", \"thread\", \"CPU core\", "
+    "\"memory page\"), not the specific label the figure uses for one instance.\n"
+    "- The reference_answer must be a conceptual statement, not a single "
+    "token, table cell, or figure label.\n"
+    "- If the question would not make sense to a student without seeing the "
+    "original figure, REWRITE it so it does.\n"
+    # Rule (v7): anti-fabrication grounding rule. Added after quiz-b363f421
+    # (mix, medium): Q3/Q9 cited specific numeric values ("30 seconds",
+    # "arriving at 0 seconds") drawn from burst/arrival-time TABLES that were
+    # not present in the retrieved prose, so the verifier flagged them
+    # answerable_from_context=False (source_lexical_overlap 0.02-0.09). The
+    # generator filled the gap from GPT-4o-mini's general scheduling knowledge.
+    # Symmetric across arms — lives in the shared block, helps mix most because
+    # its graph BFS reaches table-derived entities (P1, Burst Time, Timeline).
+    "- ABSOLUTE RULE — NO FABRICATED SPECIFICS: Do NOT cite specific "
+    "quantitative values — exact times, durations, sizes, counts, memory "
+    "addresses, or numbered instances (e.g. \"30 seconds\", \"arriving at 0 "
+    "seconds\", \"4 KB\", \"P2\") — UNLESS that exact value appears verbatim in "
+    "the Context above. Such numbers usually originate in a figure or table "
+    "that is NOT part of the retrieved text, so a question or reference_answer "
+    "that cites them cannot be grounded in the context. Ask about the "
+    "underlying relationship in conceptual terms instead. Example of FAILURE: "
+    "\"How does a process requiring 30 seconds compare to one requiring 40 "
+    "seconds?\" Example of SUCCESS: \"How does a process's burst time influence "
+    "the order in which it is scheduled?\"\n"
+)
+
+# Full user-turn prompts from claude_review_rag_framework.md §Easy/Medium/Hard
+# Prompts.
+#
+# v2 (2026-05-28): added the Avoid block above and softened the easy
+#   answer-shape line.
+# v3 (2026-05-28): added the placeholder-handling bullet to the Avoid
+#   block, after quiz-bd12fd67-… leaked literal ``{process}`` tokens into
+#   generated questions because the LLM treated the redaction placeholders
+#   as nouns. v2 quiz records remain tagged ``*_v2`` for traceability.
+# v4 (2026-05-28): three same-day refinements after quiz-caaf0e4a-…
+#   showed residual failures:
+#     - Hardened the placeholder rule into an absolute "no braces in output"
+#       prohibition with concrete failure/success examples, and moved it to
+#       the FIRST position in the Avoid block (LLMs anchor on early items).
+#     - Added an explicit anti-tautology rule (the "embedded OS designed for
+#       embedded systems" failure shape).
+#     - Added an anti-meta-question rule (the "What documents are covered?"
+#       failure shape that bypassed Tier B).
+#   Pairs with the formatter change in retrieval.py that drops the
+#   ``=== Topic ===`` section (which was triggering the meta-questions).
+# v5 (2026-05-28): two structural prompt additions after quiz-a712071b-…
+#   showed the LLM converging on a handful of "safe" easy concepts
+#   regardless of seed diversity (3× "role of CPU", 4× "function of OS"):
+#     - Added a ``Target concept: {target}`` line so the LLM anchors each
+#       question on the seed entity (normalised via
+#       :func:`lightrag.quiz.artifacts.normalize_concept_name` to avoid
+#       reintroducing brace leakage).
+#     - Added an ``Already asked (DO NOT REPEAT or REPHRASE):`` block
+#       populated with every question generated earlier in the same quiz.
+#       Read inside the cap=1 semaphore so each call sees all prior
+#       results — see ``pipeline.py:_bounded_generate``.
+#     - Added an ABSOLUTE NO REPEATS bullet to the Avoid block.
+#   Also paired with a seed-pool filter that drops figure-label entities
+#   (``Multilevel Queue Scheduling Diagram``) — see
+#   :func:`lightrag.quiz.artifacts.is_figure_label_entity`.
+# v6 (2026-05-29): positional reorder + anti-hallucination pairing after
+#   quiz-44fbc845-… showed the naive arm hallucinating from empty retrieval
+#   and the LLM ignoring the Already-asked list once it grew long:
+#     - Moved the ``Already asked`` block to appear AFTER the context (the
+#       LLM was generating right after reading context — putting the
+#       anti-repeat constraint LAST anchors it as the most recent rule).
+#     - Added a ``Final reminder`` sentence after the Already-asked block
+#       telling the LLM to rewrite drafts that repeat any prior concept.
+#   Paired with two non-prompt changes that v6 expects:
+#     - ``pipeline.py:_generate_one`` now refuses to call the generator
+#       when ``ctx.is_empty()`` (the previous behaviour produced
+#       ungrounded answers from the model's general knowledge).
+#     - ``seeds.py:_list_chunks_in_scope`` now reads chunks via
+#       ``doc_status.chunks_list`` instead of the broken
+#       ``chunks_vdb.query("the")``, which was the upstream cause of
+#       ``topic_N`` seeds dominating the naive arm.
+# v7 (2026-05-31): anti-fabrication grounding rule added to the shared Avoid
+#   block after the smoke-run-#4 verifier pass (quiz-b363f421, mix, medium)
+#   showed answerable_from_context=False on 3/10 questions. Q3 and Q9 cited
+#   specific numeric values ("30 seconds and another 40 seconds", "arriving at
+#   0 seconds and another at 1 second") that originate in burst/arrival-time
+#   TABLES absent from the retrieved prose — source_lexical_overlap was 0.02
+#   and 0.09 respectively, confirming the reference answers were ungrounded
+#   general-knowledge fills. The new ABSOLUTE RULE — NO FABRICATED SPECIFICS
+#   forbids citing exact quantitative values unless they appear verbatim in
+#   the context. Arm-symmetric (shared block), but helps the mix arm most
+#   because its graph BFS bridges clean concept-seeds (``Running``, ``Arrival
+#   Time``) into table-derived entity neighbourhoods. No paired non-prompt
+#   change — the existing empty-retrieval guard does not fire here (retrieval
+#   returned 22-35 chunks; the defect was fabricated specifics, not emptiness).
 _PROMPT_TEMPLATES: dict[str, str] = {
     "easy": (
         "You are a quiz question generator for an academic study. Given the context below, "
@@ -48,10 +172,23 @@ _PROMPT_TEMPLATES: dict[str, str] = {
         "in the context. The answer must be directly stated — no reasoning or synthesis required.\n\n"
         "Requirements:\n"
         "- The question must be answerable using ONLY the provided context\n"
-        "- The answer should be a single fact, name, number, or short phrase\n"
-        "- Do NOT ask for comparisons, causes, or multi-step reasoning\n"
+        "- The answer should be a single short conceptual statement (one sentence) "
+        "drawn directly from the context, not a verbatim table cell or label\n"
+        "- Do NOT ask for comparisons, causes, or multi-step reasoning\n\n"
+        f"{_AVOID_BLOCK}\n"
+        "- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the \"Already asked\" "
+        "section below is non-empty, your question must NOT cover the same "
+        "concept, phrasing, or answer as any item in that list. Pick a "
+        "different aspect of the target concept, or a different sub-concept "
+        "altogether, even if the retrieved context is similar.\n"
         "- Return valid JSON with keys: \"question\" (string) and \"reference_answer\" (string)\n\n"
-        "Context:\n{context}"
+        "Target concept: {target}\n\n"
+        "Context:\n{context}\n\n"
+        "Already asked (DO NOT REPEAT or REPHRASE any of these):\n{prior_questions}\n\n"
+        "Final reminder: generate ONE question that is NOT semantically "
+        "equivalent to any item in the \"Already asked\" list above. If your "
+        "first draft repeats any prior question's concept or phrasing, "
+        "rewrite it before returning JSON."
     ),
     "medium": (
         "You are a quiz question generator for an academic study. Given the context below, "
@@ -62,9 +199,21 @@ _PROMPT_TEMPLATES: dict[str, str] = {
         "- The question must be answerable ONLY using the provided context\n"
         "- The answer must synthesise information from at least 2 different context pieces\n"
         "- Ask for a comparison, relationship, contrast, or synthesis\n"
-        "- Do NOT ask for causal chains, predictions, or multi-step inference\n"
+        "- Do NOT ask for causal chains, predictions, or multi-step inference\n\n"
+        f"{_AVOID_BLOCK}\n"
+        "- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the \"Already asked\" "
+        "section below is non-empty, your question must NOT cover the same "
+        "concept, phrasing, or answer as any item in that list. Pick a "
+        "different aspect of the target concept, or a different sub-concept "
+        "altogether, even if the retrieved context is similar.\n"
         "- Return valid JSON with keys: \"question\" (string) and \"reference_answer\" (string)\n\n"
-        "Context:\n{context}"
+        "Target concept: {target}\n\n"
+        "Context:\n{context}\n\n"
+        "Already asked (DO NOT REPEAT or REPHRASE any of these):\n{prior_questions}\n\n"
+        "Final reminder: generate ONE question that is NOT semantically "
+        "equivalent to any item in the \"Already asked\" list above. If your "
+        "first draft repeats any prior question's concept or phrasing, "
+        "rewrite it before returning JSON."
     ),
     "hard": (
         "You are a quiz question generator for an academic study. Given the context below, "
@@ -76,9 +225,21 @@ _PROMPT_TEMPLATES: dict[str, str] = {
         "- The answer requires synthesising at least 3 context pieces through "
         "causal/inferential/analytical reasoning\n"
         "- The answer must NOT be explicitly stated in any single sentence\n"
-        "- Do NOT ask factual recall or simple comparison questions\n"
+        "- Do NOT ask factual recall or simple comparison questions\n\n"
+        f"{_AVOID_BLOCK}\n"
+        "- ABSOLUTE RULE — NO REPEATS OR REPHRASES: If the \"Already asked\" "
+        "section below is non-empty, your question must NOT cover the same "
+        "concept, phrasing, or answer as any item in that list. Pick a "
+        "different aspect of the target concept, or a different sub-concept "
+        "altogether, even if the retrieved context is similar.\n"
         "- Return valid JSON with keys: \"question\" (string) and \"reference_answer\" (string)\n\n"
-        "Context:\n{context}"
+        "Target concept: {target}\n\n"
+        "Context:\n{context}\n\n"
+        "Already asked (DO NOT REPEAT or REPHRASE any of these):\n{prior_questions}\n\n"
+        "Final reminder: generate ONE question that is NOT semantically "
+        "equivalent to any item in the \"Already asked\" list above. If your "
+        "first draft repeats any prior question's concept or phrasing, "
+        "rewrite it before returning JSON."
     ),
 }
 
@@ -243,6 +404,9 @@ async def generate_question(
     context: "RetrievalContext",
     difficulty: str,
     model: str | None = None,
+    *,
+    target_concept: str | None = None,
+    prior_questions: list[str] | None = None,
 ) -> tuple[str, str]:
     """Return (question, reference_answer) for the given retrieval context and difficulty.
 
@@ -270,9 +434,21 @@ async def generate_question(
       QUIZ_GENERATION_RETRY_MAX_DELAY  — backoff ceiling seconds (default 60.0)
 
     Args:
-        context:    The retrieval context produced by the retrieval arm.
-        difficulty: One of "easy", "medium", "hard".
-        model:      OpenAI model identifier; ``None`` resolves from env (see above).
+        context:         The retrieval context produced by the retrieval arm.
+        difficulty:      One of "easy", "medium", "hard".
+        model:           OpenAI model identifier; ``None`` resolves from env (see above).
+        target_concept:  Optional concept name to anchor the question on. Surfaced
+                         to the LLM as a ``Target concept`` line so it focuses on
+                         the seed entity rather than drifting to the most generic
+                         concept in the retrieval. Defaults to ``context.seed_query``
+                         when ``None`` and ``context`` carries one. The caller is
+                         expected to have normalised this with
+                         :func:`lightrag.quiz.artifacts.normalize_concept_name`
+                         so we don't reintroduce ``{thread}`` placeholder leakage.
+        prior_questions: List of questions already generated earlier in the same
+                         quiz. Surfaced to the LLM as an "Already asked" block so
+                         it can avoid duplicates. With ``cap=1`` sequential
+                         generation, the caller can simply maintain a shared list.
 
     Returns:
         (question, reference_answer) — both non-empty strings.
@@ -300,7 +476,28 @@ async def generate_question(
 
     template = _PROMPT_TEMPLATES.get(difficulty, _PROMPT_TEMPLATES["medium"])
     formatted_context = context.format_for_prompt()
-    user_message = template.format(context=formatted_context)
+
+    # Target concept: prefer the explicit argument, fall back to the seed
+    # query recorded on the context, then to a generic noun if neither is
+    # available. The caller is expected to have normalised any instance
+    # labels (Thread 3 → thread) before passing them in.
+    target = (target_concept or getattr(context, "seed_query", "") or "the topic at hand").strip()
+    if not target:
+        target = "the topic at hand"
+
+    # Prior-question list: one per line, numbered. "(none yet)" for the
+    # first call so the prompt template doesn't render an empty section
+    # that confuses the LLM.
+    if prior_questions:
+        priors_str = "\n".join(f"{i}. {q}" for i, q in enumerate(prior_questions, 1))
+    else:
+        priors_str = "(none yet — this is the first question of the quiz)"
+
+    user_message = template.format(
+        context=formatted_context,
+        target=target,
+        prior_questions=priors_str,
+    )
     messages = [{"role": "user", "content": user_message}]
 
     try:

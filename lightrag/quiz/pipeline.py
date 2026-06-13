@@ -19,6 +19,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List
 
+from lightrag.quiz.diagnostics import (
+    estimate_clarity,
+    estimate_figure_dependency,
+    pairwise_cosine_stats,
+    source_lexical_overlap,
+)
+from lightrag.quiz.artifacts import normalize_concept_name
 from lightrag.quiz.generation import (
     PROMPT_TEMPLATE_IDS,
     REASONING_TYPE,
@@ -37,9 +44,15 @@ from lightrag.quiz.schemas import (
     QuizQuestionMetadata,
     RetrievalMetadata,
 )
+from lightrag.quiz.pedagogy import (
+    judge_correctness,
+    judge_correctness_gpt,
+    judge_pedagogy,
+    judge_pedagogy_gpt,
+)
 from lightrag.quiz.seeds import sample_seeds
 from lightrag.quiz.storage import load_quiz, save_quiz, save_reverified_quiz
-from lightrag.quiz.verification import verify_question
+from lightrag.quiz.verification import verify_question, verify_question_gpt
 
 if TYPE_CHECKING:
     from lightrag import LightRAG
@@ -82,6 +95,7 @@ def _retrieval_complexity(mode: str, difficulty: str) -> int:
 def _build_retrieval_metadata(
     ctx: RetrievalContext,
     seed_strategy: str,
+    seed_score: dict | None = None,
 ) -> RetrievalMetadata:
     return RetrievalMetadata(
         entities=[e.get("entity_name", "") for e in ctx.entities],
@@ -92,6 +106,8 @@ def _build_retrieval_metadata(
         source_documents=ctx.source_documents,
         seed_query=ctx.seed_query,
         seed_strategy=seed_strategy,
+        seed_score=(seed_score or {}).get("rrf_score"),
+        seed_score_components=(seed_score or {}).get("ranks", {}),
     )
 
 
@@ -101,8 +117,16 @@ async def _generate_one(
     seed: str,
     seed_strategy: str,
     req: QuizGenerateRequest,
+    *,
+    prior_questions: List[str] | None = None,
+    seed_score: dict | None = None,
 ) -> QuizQuestionMetadata:
-    """Generate, optionally verify, and return metadata for one question."""
+    """Generate, optionally verify, and return metadata for one question.
+
+    ``prior_questions`` is surfaced to the generator so it can avoid
+    repeating or rephrasing earlier questions in the same quiz — see R5
+    in quiz-fix-plan.md.
+    """
 
     # 1. Retrieve
     scope_doc_ids = set(req.document_ids)
@@ -117,6 +141,20 @@ async def _generate_one(
     claimed_complexity = _retrieval_complexity(req.mode, req.difficulty)
     claimed_reasoning = REASONING_TYPE[req.difficulty]
 
+    # 1.5 Anti-hallucination guard. When retrieval returns nothing, the
+    # generator would otherwise fall back on GPT-4o-mini's training data
+    # and produce an answer that *looks* plausible but cannot be traced
+    # to any selected document — the failure mode seen in
+    # quiz-44fbc845-… (5/25 questions with chunks=[] and fabricated
+    # answers about ``kill`` system calls). Skip the seed and let the
+    # bounded-generate wrapper convert this into a warning, dropping
+    # the quiz count rather than emitting an ungrounded question.
+    if ctx.is_empty():
+        raise RuntimeError(
+            f"Refusing to generate from empty retrieval (seed={seed!r}). "
+            "Question would be ungrounded in the selected documents."
+        )
+
     # 2. Generate
     # Resolve generation model once (same order as generation.py's internal logic)
     generation_model = (
@@ -124,29 +162,95 @@ async def _generate_one(
         or os.environ.get("LLM_MODEL", "")
         or "gpt-4o-mini"
     )
+    # Normalize the seed to a concept noun so the LLM doesn't see
+    # ``Target concept: Thread 3`` or ``Target concept: P_0`` — those
+    # would feed back into instance-label questions.
+    target = normalize_concept_name(seed)
     question, reference_answer = await generate_question(
-        ctx, req.difficulty, model=generation_model
+        ctx,
+        req.difficulty,
+        model=generation_model,
+        target_concept=target,
+        prior_questions=prior_questions,
     )
 
     # 3. Build metadata
-    retrieval_meta = _build_retrieval_metadata(ctx, seed_strategy)
+    retrieval_meta = _build_retrieval_metadata(ctx, seed_strategy, seed_score)
+
+    # Diagnostic metrics — non-behavioral, surface extraction-like shapes
+    # the verifier prompt can't catch. See lightrag/quiz/diagnostics.py.
+    top_chunk_text = ""
+    if ctx.chunks:
+        top_chunk_text = ctx.chunks[0].get("content", ctx.chunks[0].get("text", ""))
+    fig_dep = estimate_figure_dependency(question, reference_answer)
+    lex_overlap = source_lexical_overlap(question, top_chunk_text)
+    clarity = estimate_clarity(question)
+    chunk_count = len(ctx.chunks) if ctx.chunks else 0
+
     generation_meta = GenerationMetadata(
         model=generation_model,
         prompt_template_id=PROMPT_TEMPLATE_IDS[req.difficulty],
         question=question,
         reference_answer=reference_answer,
+        figure_dependency_estimate=fig_dep,
+        source_lexical_overlap=lex_overlap,
+        clarity_heuristic=clarity,
+        retrieved_chunk_count=chunk_count,
     )
 
-    # 4. Verify (optional)
-    verification_meta = None
+    # 4. Evaluate (optional). All judge calls are independent — run them all
+    # concurrently to keep per-question latency low. Claude (primary, out-family)
+    # and GPT (second judge, in-family) run in parallel for every enabled role.
+    verification_meta = pedagogy_meta = correctness_meta = None
+    verification_gpt_meta = pedagogy_gpt_meta = correctness_gpt_meta = None
+    jobs = []
     if req.run_verification:
-        verification_meta = await verify_question(
-            question=question,
-            reference_answer=reference_answer,
-            context=ctx,
-            claimed_complexity=claimed_complexity,
-            claimed_reasoning_type=claimed_reasoning,
-        )
+        jobs.append((
+            "verification",
+            verify_question(
+                question=question,
+                reference_answer=reference_answer,
+                context=ctx,
+                claimed_complexity=claimed_complexity,
+                claimed_reasoning_type=claimed_reasoning,
+            ),
+        ))
+        jobs.append((
+            "verification_gpt",
+            verify_question_gpt(
+                question=question,
+                reference_answer=reference_answer,
+                context=ctx,
+                claimed_complexity=claimed_complexity,
+                claimed_reasoning_type=claimed_reasoning,
+            ),
+        ))
+        jobs.append((
+            "pedagogy",
+            judge_pedagogy(question=question, reference_answer=reference_answer),
+        ))
+        jobs.append((
+            "pedagogy_gpt",
+            judge_pedagogy_gpt(question=question, reference_answer=reference_answer),
+        ))
+    if req.run_correctness_check:
+        jobs.append((
+            "correctness",
+            judge_correctness(question=question, reference_answer=reference_answer),
+        ))
+        jobs.append((
+            "correctness_gpt",
+            judge_correctness_gpt(question=question, reference_answer=reference_answer),
+        ))
+    if jobs:
+        done = await asyncio.gather(*(coro for _, coro in jobs))
+        results = dict(zip((name for name, _ in jobs), done))
+        verification_meta = results.get("verification")
+        verification_gpt_meta = results.get("verification_gpt")
+        pedagogy_meta = results.get("pedagogy")
+        pedagogy_gpt_meta = results.get("pedagogy_gpt")
+        correctness_meta = results.get("correctness")
+        correctness_gpt_meta = results.get("correctness_gpt")
 
     return QuizQuestionMetadata(
         question_id=str(uuid.uuid4()),
@@ -157,6 +261,11 @@ async def _generate_one(
         retrieval=retrieval_meta,
         generation=generation_meta,
         verification=verification_meta,
+        verification_gpt=verification_gpt_meta,
+        pedagogy=pedagogy_meta,
+        pedagogy_gpt=pedagogy_gpt_meta,
+        correctness=correctness_meta,
+        correctness_gpt=correctness_gpt_meta,
     )
 
 
@@ -172,21 +281,69 @@ async def generate_quiz(rag: "LightRAG", req: QuizGenerateRequest) -> QuizGenera
     warnings: List[str] = []
 
     # Sample seeds
-    seeds, seed_strategy = await sample_seeds(rag, req.mode, req.num_questions, scope_doc_ids)
+    selection = await sample_seeds(rag, req.mode, req.num_questions, scope_doc_ids)
+    seeds = selection.seeds
+    seed_strategy = selection.strategy
+    # Align per-seed RRF scores with seeds (empty for the random baseline).
+    seed_scores: List[dict | None]
+    if selection.seed_scores and len(selection.seed_scores) == len(seeds):
+        seed_scores = list(selection.seed_scores)
+    else:
+        seed_scores = [None] * len(seeds)
+
     if not seeds:
-        warnings.append(
-            "No seeds could be sampled from the selected documents. "
-            "Using generic placeholders — question quality may be low."
-        )
-        seeds = [f"topic_{i+1}" for i in range(req.num_questions)]
+        if selection.authoritative:
+            # The pedagogical scorer ran but nothing cleared the meaningfulness
+            # floor (typically a figure/table-anchor-dominated file set). Honour
+            # the empty quiz — do NOT fabricate topic_N placeholders or revert to
+            # random seeds, which would mask the finding (quality-plan.md §6.1).
+            warnings.append(
+                "Seed selection found no candidates that clear the meaningfulness "
+                "floor for the selected documents — returning an empty quiz "
+                "(no placeholder padding). The chosen files are likely dominated "
+                "by figure/table anchors with little teachable prose."
+            )
+        else:
+            warnings.append(
+                "No seeds could be sampled from the selected documents. "
+                "Using generic placeholders — question quality may be low."
+            )
+            seeds = [f"topic_{i+1}" for i in range(req.num_questions)]
+            seed_scores = [None] * len(seeds)
 
-    # Generate questions with concurrency cap
+    # Transparency: surface files that contributed nothing (quality-plan.md §6.2).
+    for fc in selection.file_contributions:
+        if fc.get("seed_count", 0) == 0:
+            warnings.append(
+                f"File '{fc.get('doc_id')}' contributed 0 seeds "
+                f"(reason: {fc.get('reason')})."
+            )
+
+    # Generate questions with concurrency cap.
+    #
+    # The prior-question list is read inside the semaphore so it reflects
+    # every question that finished *before* this task acquired the lock.
+    # With cap=1 (the default) this gives strict sequential ordering and
+    # each call sees all earlier results — exactly what R5-1 needs to
+    # avoid duplicate / paraphrased questions.
     semaphore = asyncio.Semaphore(_CONCURRENCY_CAP)
+    prior_questions_so_far: List[str] = []
 
-    async def _bounded_generate(seed: str) -> QuizQuestionMetadata | None:
+    async def _bounded_generate(
+        seed: str, seed_score: dict | None
+    ) -> QuizQuestionMetadata | None:
         async with semaphore:
+            # Snapshot the priors at the moment we hold the semaphore so a
+            # later release/acquire doesn't surprise us mid-call.
+            priors_snapshot = list(prior_questions_so_far)
             try:
-                result = await _generate_one(rag, quiz_id, seed, seed_strategy, req)
+                result = await _generate_one(
+                    rag, quiz_id, seed, seed_strategy, req,
+                    prior_questions=priors_snapshot,
+                    seed_score=seed_score,
+                )
+                if result is not None and result.generation.question:
+                    prior_questions_so_far.append(result.generation.question)
                 # Brief sleep after each question to spread TPM consumption
                 # over time and avoid synchronised bursts from parallel workers.
                 if _INTER_REQUEST_DELAY > 0:
@@ -196,12 +353,27 @@ async def generate_quiz(rag: "LightRAG", req: QuizGenerateRequest) -> QuizGenera
                 warnings.append(f"Failed to generate question for seed '{seed}': {exc}")
                 return None
 
-    tasks = [_bounded_generate(seed) for seed in seeds]
+    tasks = [
+        _bounded_generate(seed, score) for seed, score in zip(seeds, seed_scores)
+    ]
     results = await asyncio.gather(*tasks)
     questions = [q for q in results if q is not None]
 
-    if not questions:
+    if seeds and not questions:
         warnings.append("All question generations failed — returning empty quiz.")
+
+    # Quiz-level diversity metric (quality-plan.md §8.1). Best-effort: embed the
+    # generated questions and report mean/max pairwise cosine similarity. Never
+    # fails the quiz — disabled with QUIZ_COMPUTE_DIVERSITY=false.
+    diversity: dict = {}
+    if questions and os.environ.get("QUIZ_COMPUTE_DIVERSITY", "true").lower() == "true":
+        q_texts = [q.generation.question for q in questions if q.generation.question]
+        if len(q_texts) >= 2:
+            try:
+                vecs = await rag.embedding_func(q_texts)
+                diversity = pairwise_cosine_stats(vecs)
+            except Exception as exc:
+                warnings.append(f"Diversity metric computation failed: {exc}")
 
     response = QuizGenerateResponse(
         quiz_id=quiz_id,
@@ -209,6 +381,8 @@ async def generate_quiz(rag: "LightRAG", req: QuizGenerateRequest) -> QuizGenera
         request=req,
         questions=questions,
         warnings=warnings,
+        file_contributions=selection.file_contributions,
+        diversity=diversity,
     )
 
     # Persist

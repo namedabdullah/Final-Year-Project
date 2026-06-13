@@ -115,7 +115,12 @@ def _is_nan(value: Any) -> bool:
 class RAGEvaluator:
     """Evaluate RAG system quality using RAGAS metrics"""
 
-    def __init__(self, test_dataset_path: str = None, rag_api_url: str = None):
+    def __init__(
+        self,
+        test_dataset_path: str = None,
+        rag_api_url: str = None,
+        mode: str = None,
+    ):
         """
         Initialize evaluator with test dataset
 
@@ -123,8 +128,11 @@ class RAGEvaluator:
             test_dataset_path: Path to test dataset JSON file
             rag_api_url: Base URL of LightRAG API (e.g., http://localhost:9621)
                         If None, will try to read from environment or use default
+            mode: LightRAG query mode (local/global/hybrid/mix/naive).
+                  Overrides EVAL_QUERY_MODE env var. Default: "mix".
 
         Environment Variables:
+            EVAL_QUERY_MODE: LightRAG query mode (default: mix)
             EVAL_LLM_MODEL: LLM model for evaluation (default: gpt-4o-mini)
             EVAL_EMBEDDING_MODEL: Embedding model for evaluation (default: text-embedding-3-small)
             EVAL_LLM_BINDING_API_KEY: API key for LLM (fallback to OPENAI_API_KEY)
@@ -211,6 +219,14 @@ class RAGEvaluator:
             )
             self.eval_llm = base_llm
 
+        # Query mode: CLI arg > env var > default "mix"
+        valid_modes = {"local", "global", "hybrid", "mix", "naive"}
+        self.mode = mode or os.getenv("EVAL_QUERY_MODE", "mix")
+        if self.mode not in valid_modes:
+            raise ValueError(
+                f"Invalid mode '{self.mode}'. Must be one of: {', '.join(sorted(valid_modes))}"
+            )
+
         if test_dataset_path is None:
             test_dataset_path = Path(__file__).parent / "sample_dataset.json"
 
@@ -238,6 +254,8 @@ class RAGEvaluator:
 
     def _display_configuration(self):
         """Display all evaluation configuration settings"""
+        logger.info("Query Configuration:")
+        logger.info("  • Query Mode:           %s", self.mode)
         logger.info("Evaluation Models:")
         logger.info("  • LLM Model:            %s", self.eval_model)
         logger.info("  • Embedding Model:      %s", self.eval_embedding_model)
@@ -309,7 +327,7 @@ class RAGEvaluator:
         try:
             payload = {
                 "query": question,
-                "mode": "mix",
+                "mode": self.mode,
                 "include_references": True,
                 "include_chunk_content": True,  # NEW: Request chunk content in references
                 "response_type": "Multiple Paragraphs",
@@ -641,7 +659,7 @@ class RAGEvaluator:
             - timestamp: When evaluation was run
         """
         csv_path = (
-            self.results_dir / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            self.results_dir / f"results_{self.mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         )
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -894,7 +912,7 @@ class RAGEvaluator:
         # Save JSON results
         json_path = (
             self.results_dir
-            / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            / f"results_{self.mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         )
         with open(json_path, "w") as f:
             json.dump(summary, f, indent=2)
@@ -997,6 +1015,15 @@ Examples:
             help="LightRAG API endpoint URL (default: http://localhost:9621 or $LIGHTRAG_API_URL environment variable)",
         )
 
+        parser.add_argument(
+            "--mode",
+            "-m",
+            type=str,
+            default=None,
+            choices=["local", "global", "hybrid", "mix", "naive"],
+            help="LightRAG query mode to evaluate (default: mix or $EVAL_QUERY_MODE environment variable)",
+        )
+
         args = parser.parse_args()
 
         logger.info("%s", "=" * 70)
@@ -1004,7 +1031,9 @@ Examples:
         logger.info("%s", "=" * 70)
 
         evaluator = RAGEvaluator(
-            test_dataset_path=args.dataset, rag_api_url=args.ragendpoint
+            test_dataset_path=args.dataset,
+            rag_api_url=args.ragendpoint,
+            mode=args.mode,
         )
         await evaluator.run()
     except Exception as e:

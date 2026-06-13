@@ -1,0 +1,79 @@
+{
+  "test_cases": [
+    {
+      "question": "What is the role of the kernel in an operating system?",
+      "ground_truth": "The kernel is the core component of an operating system that manages system resources and facilitates communication between user applications and hardware. It provides process management, memory management, file-system management, and interrupt handling.",
+      "project": "os_course_easy"
+    },
+    {
+      "question": "What is the primary purpose of system calls in relation to user processes?",
+      "ground_truth": "System calls are mechanisms that allow user processes to request services from the operating system's kernel. They provide the controlled interface through which user-mode processes cross the privilege boundary to access kernel-level operations such as I/O, process creation, and memory allocation.",
+      "project": "os_course_easy"
+    },
+    {
+      "question": "What do processes in the ready queue signify about their state in relation to the CPU?",
+      "ground_truth": "Processes in the ready queue are prepared for execution by the CPU. They have all required resources except CPU time and are waiting to be selected by the scheduler. They are not currently executing, but are eligible to run as soon as the CPU becomes available.",
+      "project": "os_course_easy"
+    },
+    {
+      "question": "What information does the Process Control Block (PCB) maintain for each process?",
+      "ground_truth": "The Process Control Block (PCB) maintains information associated with each process, including: process state (running, ready, blocked), process number (PID), program counter, CPU registers, memory-management information (memory limits, page tables), and a list of open files. It is also called the task control block.",
+      "project": "os_course_easy"
+    },
+    {
+      "question": "What is one key advantage of multiprocessor systems over single-processor systems?",
+      "ground_truth": "Multiprocessor systems increase throughput by allowing more work to be done in less time through parallel execution. They also provide increased reliability through graceful degradation — if one processor fails, the system continues to operate, just at reduced performance.",
+      "project": "os_course_easy"
+    },
+    {
+      "question": "How does I/O interrupt processing improve the efficiency of multiprogramming?",
+      "ground_truth": "I/O interrupt processing enhances the efficiency of multiprogramming by allowing the CPU to continue executing other processes while waiting for I/O operations to complete. When I/O starts, the CPU does not idle; instead it runs another ready process. When I/O finishes, an interrupt notifies the OS, which moves the waiting process back to the ready queue. This overlap of I/O and computation improves overall system utilization and throughput.",
+      "project": "os_course_medium"
+    },
+    {
+      "question": "How do the three methods of passing parameters to the OS (register, block, stack) differ in terms of flexibility and limitations?",
+      "ground_truth": "The simplest method passes parameters in CPU registers, which is fast but limited by the number of available registers, restricting the count and size of parameters. The block method stores parameters in a memory table and passes the address of that block in a register, imposing no limit on the number or length of parameters. The stack method pushes parameters onto the program stack, also allowing unlimited parameters. Both the block and stack methods are more flexible than register passing for system calls with many or large parameters.",
+      "project": "os_course_medium"
+    },
+    {
+      "question": "How do unique system calls across different operating systems affect application portability?",
+      "ground_truth": "Unique system calls in different operating systems necessitate that applications are compiled specifically for each OS because each OS provides a different set of system call APIs. An application that uses OS-specific system calls will not run on another OS without modification or recompilation. This OS-specific nature also extends to hardware interaction, since each OS manages devices and resources differently, making applications dependent on the underlying OS's architecture and ABI.",
+      "project": "os_course_medium"
+    },
+    {
+      "question": "How does dual-mode operation (user mode and kernel mode) protect the operating system from user programs?",
+      "ground_truth": "Dual-mode operation protects the OS by using a mode bit to distinguish whether the CPU is executing user code or kernel code. In user mode, privileged instructions and direct hardware access are prohibited. When a user process needs OS services, it executes a system call which triggers a mode switch to kernel mode. The OS performs the requested operation and then returns to user mode. This prevents user programs from corrupting OS data structures or directly accessing hardware, ensuring system stability and security.",
+      "project": "os_course_medium"
+    },
+    {
+      "question": "What are the process state transitions a process can undergo, and what events trigger each transition?",
+      "ground_truth": "A process moves through the following states: New (being created) → Ready (loaded in memory, waiting for CPU) when admitted. Ready → Running when the scheduler dispatches it (allocates CPU time). Running → Ready when an interrupt preempts it. Running → Waiting/Blocked when the process requests I/O or waits for an event. Waiting → Ready when the I/O operation or event completes. Running → Terminated when the process exits. These transitions are managed by the OS scheduler and interrupt handlers using the process state stored in the PCB.",
+      "project": "os_course_medium"
+    },
+    {
+      "question": "How does the interplay between overlapping I/O operations and CPU scheduling influence the overall efficiency of a multitasking operating system?",
+      "ground_truth": "The efficiency of a multitasking OS is maximised by overlapping I/O with CPU computation. When one process issues an I/O request, the OS blocks it and dispatches another ready process to the CPU. An interrupt signals I/O completion, and the previously blocked process moves back to the ready queue. This prevents CPU idle time caused by I/O waits, keeps the CPU busy processing multiple processes concurrently, and increases system throughput. The degree of improvement depends on the mix of CPU-bound and I/O-bound processes in the workload.",
+      "project": "os_course_hard"
+    },
+    {
+      "question": "How does the state information in a process's PCB determine its placement in the ready or wait queues, and what are the implications for CPU resource utilisation?",
+      "ground_truth": "The process state stored in the PCB directly determines queue placement. A process in the Ready state is placed in the ready queue and is eligible to be dispatched to the CPU by the scheduler. A process in the Waiting/Blocked state is placed in a device-specific I/O wait queue until its pending event (such as disk I/O completion) occurs. Upon event completion, an interrupt handler updates the PCB state to Ready and moves the process to the ready queue. Effective management of these state transitions keeps the CPU busy by ensuring a supply of ready processes, minimising idle CPU time and improving overall resource utilisation.",
+      "project": "os_course_hard"
+    },
+    {
+      "question": "How do differences in system call implementations across operating systems affect application portability and hardware interaction?",
+      "ground_truth": "Different operating systems define unique system call interfaces and ABIs (Application Binary Interfaces), which specify how binary code components interact with the OS on a given architecture. Applications that depend on OS-specific system calls cannot run unmodified on a different OS because the call numbers, parameters, and semantics differ. This also affects hardware interaction: each OS manages device drivers and hardware protection mechanisms differently, meaning an application's low-level I/O and resource access behaviour is tied to the specific OS. Portability therefore requires either recompiling against the target OS's APIs or using abstraction layers such as POSIX-compatible interfaces.",
+      "project": "os_course_hard"
+    },
+    {
+      "question": "How do the constraints of cost, time, and power influence operating system design tradeoffs, particularly as hardware and applications evolve rapidly?",
+      "ground_truth": "OS designers face constant tradeoffs driven by constraints of cost, development time, and power consumption. Cost constraints may force simpler implementations that sacrifice performance. Time-to-market pressure limits the scope of optimisation. Power constraints, especially in mobile and embedded systems, require energy-aware scheduling and reduced hardware utilisation. Because hardware and application workloads change rapidly, these tradeoffs must be continuously re-evaluated: an OS optimised for one hardware generation may perform poorly on the next. OS design is therefore engineering under imperfection — there is no single optimal solution, only context-dependent tradeoffs between performance, functionality, reliability, and resource consumption.",
+      "project": "os_course_hard"
+    },
+    {
+      "question": "How does a microkernel architecture differ from a monolithic kernel in terms of performance, modularity, and fault isolation, and what design tradeoffs does each approach involve?",
+      "ground_truth": "A monolithic kernel runs all OS services (scheduling, memory management, file systems, device drivers) in a single kernel address space. This is fast because service interactions are direct function calls within kernel mode, but a bug in any component can crash the entire system, and the codebase is harder to maintain and extend. A microkernel moves most services (file system, device drivers, protocol stacks) to user-space servers, keeping only the minimal core (IPC, basic scheduling, memory mapping) in kernel mode. This improves fault isolation — a crashing server can be restarted without rebooting — and modularity, but introduces performance overhead from the increased message-passing (IPC) required between user-space components. The design tradeoff is reliability and maintainability (microkernel) versus raw performance (monolithic).",
+      "project": "os_course_hard"
+    }
+  ]
+}

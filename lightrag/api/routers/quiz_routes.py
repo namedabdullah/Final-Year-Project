@@ -19,8 +19,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from lightrag import LightRAG
 from lightrag.api.utils_api import get_combined_auth_dependency
+from lightrag.quiz.ablation import run_ablation
 from lightrag.quiz.pipeline import generate_quiz, reverify_quiz
 from lightrag.quiz.schemas import (
+    QuizAblationRequest,
     QuizGenerateRequest,
     QuizGenerateResponse,
     QuizSummary,
@@ -69,6 +71,34 @@ def create_quiz_routes(
                 status_code=500,
                 detail=f"Quiz generation failed: {exc}",
             )
+
+    # ------------------------------------------------------------------
+    # POST /quiz/ablation  (Phase-4 seed-scoring ablation; no LLM, no quiz)
+    # ------------------------------------------------------------------
+
+    @router.post(
+        "/ablation",
+        dependencies=[Depends(combined_auth)],
+        summary="Run the seed-scoring ablation study",
+        description=(
+            "Deterministically re-scores the seed pool for one arm under each "
+            "single-signal-dropped and up-weighted configuration, reporting how "
+            "the selected seed set shifts (Jaccard). No LLM calls, no quiz is "
+            "generated. Thesis-appendix evidence (quality-plan.md §8.2)."
+        ),
+    )
+    async def ablation(req: QuizAblationRequest) -> dict:
+        if not req.document_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="document_ids must contain at least one document ID.",
+            )
+        try:
+            return await run_ablation(
+                rag, req.mode, req.num_questions, set(req.document_ids)
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Ablation failed: {exc}")
 
     # ------------------------------------------------------------------
     # GET /quiz/list

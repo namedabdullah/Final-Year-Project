@@ -1,0 +1,138 @@
+================================================================================
+DATASET DETAILS
+================================================================================
+
+OVERVIEW
+--------------------------------------------------------------------------------
+This study uses two related but distinct datasets:
+
+  (i)  A SOURCE CORPUS of course slide material, which is ingested by LightRAG
+       to build the knowledge base from which quiz questions are generated.
+
+  (ii) A GENERATED EVALUATION DATASET of quiz questions, which is the object
+       actually scored and compared across retrieval modes.
+
+A small hand-curated GROUND-TRUTH reference set additionally supports
+retrieval-quality checks. Each is described below, together with its source,
+creation process, size, fields, and cleaning/validation steps.
+
+
+1. SOURCE CORPUS
+--------------------------------------------------------------------------------
+Source
+  University-level Operating Systems (OS) lecture slide decks in PowerPoint
+  (.pptx) format. The corpus covers the standard OS syllabus: introduction and
+  OS services; OS structure (kernel, system calls, dual-mode operation, micro-
+  vs. monolithic kernels); process management (process control block, process
+  states, scheduling); interprocess communication; threads; synchronization;
+  deadlocks; memory and virtual memory; and mass-storage management.
+
+Rationale
+  The OS domain is self-contained, technically precise, and densely
+  interconnected. Entities such as "kernel", "system call", "PCB", and
+  "process state" form natural multi-hop relationships, making the corpus well
+  suited to contrasting graph-based retrieval (mix) against vector-only
+  retrieval (naive).
+
+Size (full knowledge base)
+  - Documents: 12 OS slide decks (.pptx)
+  - Total text: 279,619 characters (approx. 46,600 words)
+  - Text chunks: 331
+
+Experimental subset (used for quiz generation)
+  Quiz generation was deliberately scoped, via explicit document IDs, to three
+  representative decks so that both retrieval arms draw from an identical,
+  bounded source:
+    - 1-Introduction.pptx
+    - 2-OS Structure.pptx
+    - 3a-Process Management.pptx
+  Subset size: approx. 72,969 characters (approx. 12,160 words), 71 chunks.
+
+
+2. KNOWLEDGE-BASE CONSTRUCTION (CREATION PROCESS)
+--------------------------------------------------------------------------------
+The .pptx files were ingested through the LightRAG pipeline, which:
+  (a) parses each deck to plain text,
+  (b) splits the text into overlapping, token-bounded chunks,
+  (c) embeds each chunk into a vector store, and
+  (d) prompts an extraction LLM to identify entities and relations, assembling
+      them into a knowledge graph.
+
+Ingestion of the full corpus produced:
+  - Text chunks : 331
+  - Entities    : 2,043
+  - Relations   : 6,201
+
+Configuration (for reproducibility)
+  - Extraction / generation LLM : gpt-4o-mini (OpenAI; LLM_BINDING=openai).
+                                  Used for entity/relation extraction during
+                                  ingestion and for question generation.
+  - Embedding model             : text-embedding-3-large (OpenAI), 3072
+                                  dimensions, 8192-token input limit.
+  - Chunking                    : fixed-token chunking with chunk_token_size =
+                                  1200 tokens and chunk_overlap_token_size =
+                                  100 tokens. Observed chunk size across the
+                                  corpus: mean 371 tokens, max 1199 tokens
+                                  (331 chunks total).
+  - Reranking                   : disabled (RERANK_BINDING=null).
+  - Summary language            : English.
+  - Storage backends (file-based, default LightRAG stack):
+        * Knowledge graph  : NetworkXStorage (GraphML)
+        * Vector store     : NanoVectorDBStorage (entities, relations, chunks)
+        * Key-value store  : JsonKVStorage
+        * Doc-status store : JsonDocStatusStorage
+  - Ingestion concurrency       : MAX_ASYNC = 4.
+
+
+3. GENERATED EVALUATION DATASET
+--------------------------------------------------------------------------------
+Creation process
+  A controlled 2 x 3 generation matrix:
+    - Retrieval arms (2):
+        * mix   - knowledge-graph BFS over entities/relations combined with
+                  vector chunks.
+        * naive - vector-only retrieval (no graph).
+    - Difficulty levels (3): easy, medium, hard.
+  All cells share the same generator (gpt-4o-mini, prompt template easy_v7) and
+  the same source documents. The sole independent variable is HOW context is
+  retrieved before generation. Difficulty controls retrieval depth: BFS hop
+  depth (1/2/3) for mix, and chunk count (1/2/3) for naive.
+
+Size
+  - 50 questions per cell
+  - 2 arms x 3 difficulties x 50 = 300 questions
+  - Each question judged by a two-model panel (Claude Sonnet 4.6 and GPT-5-mini)
+    => 600 judge-records per metric.
+
+Fields per question (stored as JSON)
+  Identity & claims:
+    question_id, arm, difficulty, claimed_retrieval_complexity,
+    claimed_reasoning_type
+  Retrieval trace:
+    entities, relations, bfs_path, chunk_ids, hop_depth, source_documents,
+    seed_query, seed_strategy, seed_score
+  Generation:
+    question, reference_answer, figure_dependency_estimate,
+    source_lexical_overlap, retrieved_chunk_count, clarity_heuristic
+  Judge - verification (x2 judges):
+    actual_retrieval_complexity, actual_reasoning_type,
+    answerable_from_context, claimed_complexity_matches,
+    claimed_reasoning_matches
+  Judge - pedagogy (x2 judges):
+    pedagogical_value (1-5), bloom_level, answer_completeness (1-5)
+  Judge - correctness (x2 judges):
+    answer_correctness (1-5; 0 = unscored)
+  Quiz-level:
+    diversity (mean/max pairwise similarity), file_contributions
+
+
+4. GROUND-TRUTH REFERENCE SET
+--------------------------------------------------------------------------------
+A separate, manually authored set of question-answer pairs
+(os_course_dataset.json) provides gold reference answers for retrieval-quality
+evaluation.
+  - Total: 15 question-answer pairs
+  - Split: 5 easy / 5 medium / 5 hard
+  - Fields per record: question, ground_truth, project (difficulty tag)
+Unlike the generated dataset, these answers are human-written and serve as fixed
+targets for the RAG-quality evaluation script.

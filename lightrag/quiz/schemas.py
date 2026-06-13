@@ -39,12 +39,20 @@ class QuizGenerateRequest(BaseModel):
         "medium",
         description="Difficulty level — controls retrieval depth AND reasoning type.",
     )
-    num_questions: Literal[10, 25, 50] = Field(
-        10, description="Number of questions to generate."
+    num_questions: Literal[5, 10, 25, 50] = Field(
+        10, description="Number of questions to generate (5 = pilot per judge-methodology §10 Step 2)."
     )
     run_verification: bool = Field(
         True,
         description="Whether to verify each question with Claude Sonnet after generation.",
+    )
+    run_correctness_check: bool = Field(
+        False,
+        description=(
+            "Whether to run the independent fact-checker — an extra Claude call per "
+            "question that judges factual correctness regardless of context. Off for "
+            "cheap pilots; on for the final matrix."
+        ),
     )
 
     # Optional overrides (None = use mode/difficulty defaults)
@@ -54,6 +62,19 @@ class QuizGenerateRequest(BaseModel):
     max_relation_tokens: Optional[int] = None
     max_total_tokens: Optional[int] = None
     user_prompt: Optional[str] = None
+
+
+class QuizAblationRequest(BaseModel):
+    """Request body for POST /quiz/ablation (Phase-4 ablation harness).
+
+    Runs the deterministic seed-scoring ablation/sensitivity study for one arm
+    against the live index — no LLM calls, no quiz generated (quality-plan.md
+    §8.2). Used by the experiment runner to produce thesis-appendix evidence.
+    """
+
+    document_ids: List[str] = Field(..., min_length=1)
+    mode: Literal["mix", "naive"] = "mix"
+    num_questions: Literal[10, 25, 50] = 25
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +102,19 @@ class RetrievalMetadata(BaseModel):
     seed_query: str = Field("", description="The seed query used to bootstrap retrieval.")
     seed_strategy: str = Field(
         "entity",
-        description="'entity' (degree-weighted) or 'chunk' (first-sentence) sampling.",
+        description=(
+            "Seed sampling strategy actually used, e.g. 'entity'/'chunk' (random "
+            "baseline) or 'entity-pedagogical'/'chunk-pedagogical' (RRF scorer)."
+        ),
+    )
+    # Pedagogical-scorer transparency (quality-plan.md §5/§9). None for the
+    # random baseline; populated when QUIZ_SEED_STRATEGY=pedagogical.
+    seed_score: Optional[float] = Field(
+        None, description="RRF fusion score of the seed that produced this question."
+    )
+    seed_score_components: dict = Field(
+        default_factory=dict,
+        description="Per-signal ranks behind the RRF score, e.g. {'deg': 3, 'xdoc': 1, 'freq': 5}.",
     )
 
 
@@ -89,9 +122,42 @@ class GenerationMetadata(BaseModel):
     """Records the generation call details."""
 
     model: str = Field("gpt-4o")
-    prompt_template_id: str = Field("", description="e.g. 'easy_v1', 'hard_v1'")
+    prompt_template_id: str = Field("", description="e.g. 'easy_v2', 'hard_v2'")
     question: str = ""
     reference_answer: str = ""
+    # Diagnostic — no behavioral impact, used for analytics & thesis reporting.
+    # See lightrag/quiz/diagnostics.py for the heuristic definitions.
+    figure_dependency_estimate: float = Field(
+        0.0,
+        description=(
+            "0.0 = question is fully concept-based; "
+            "1.0 = question reads like a label/cell lookup from a figure."
+        ),
+    )
+    source_lexical_overlap: float = Field(
+        0.0,
+        description=(
+            "Stopword-filtered Jaccard overlap between question tokens and "
+            "the top retrieved chunk tokens. Higher = more extractive surface form."
+        ),
+    )
+    retrieved_chunk_count: int = Field(
+        0,
+        description=(
+            "Number of in-scope chunks retrieved for this question. "
+            "0 means the question was generated from an empty retrieval — "
+            "should never occur after R6-2 (anti-hallucination guard), but "
+            "the field gives downstream analytics a column to detect any leak."
+        ),
+    )
+    clarity_heuristic: float = Field(
+        0.0,
+        description=(
+            "0.0..1.0 deterministic clarity / single-focus estimate. NOTE: unlike "
+            "figure_dependency_estimate and source_lexical_overlap (higher = worse), "
+            "here HIGHER = clearer / more focused; lower = over-stuffed, multi-clause."
+        ),
+    )
 
 
 class VerificationMetadata(BaseModel):
@@ -106,12 +172,70 @@ class VerificationMetadata(BaseModel):
     notes: str = ""
 
 
+class PedagogyMetadata(BaseModel):
+    """Pedagogical-quality judgement of a question (separate judge call).
+
+    Computed by lightrag/quiz/pedagogy.py with its own LLM call (Claude Sonnet),
+    judged from the question + reference answer only — the locked verifier prompt
+    is deliberately left untouched. 0 / "" mean unscored (mock or parse failure).
+    """
+
+    model: str = "claude-sonnet-4-6"
+    pedagogical_value: int = Field(
+        0, description="1 = trivia … 5 = foundational concept. 0 = unscored."
+    )
+    bloom_level: str = Field(
+        "",
+        description="Bloom's level: remember|understand|apply|analyze|evaluate|create. '' = unscored.",
+    )
+    answer_completeness: int = Field(
+        0, description="1 = does not address … 5 = fully addresses the question. 0 = unscored."
+    )
+    notes: str = ""
+
+
+class CorrectnessMetadata(BaseModel):
+    """Independent factual-correctness check (optional, separate judge call).
+
+    Run only when ``QuizGenerateRequest.run_correctness_check`` is true. A
+    fact-checker prompt judges whether the reference answer is factually correct
+    *independent* of whether it is grounded in the retrieved context. 0 = unscored.
+    """
+
+    model: str = "claude-sonnet-4-6"
+    answer_correctness: int = Field(
+        0, description="1 = definitely wrong … 5 = definitely correct. 0 = unscored."
+    )
+    notes: str = ""
+
+
 class HumanRatingMetadata(BaseModel):
     """Optional; populated offline via exported JSON + spreadsheet workflow."""
 
     rater_id: str = ""
     rating: int = Field(0, ge=1, le=5)
     notes: str = ""
+
+
+class FileContribution(BaseModel):
+    """Per-file seed contribution for a quiz (quality-plan.md §6.2).
+
+    Surfaces *which* selected documents actually drove the quiz and *why* a file
+    contributed nothing — so "this file added nothing" is visible rather than
+    silent. Contribution is earned via the Cap+Merit+Floor allocator, never
+    assigned up front.
+    """
+
+    doc_id: str
+    seed_count: int = 0
+    reason: Literal["contributed", "below_threshold", "outranked", "capped"] = Field(
+        "outranked",
+        description=(
+            "contributed = ≥1 seed; below_threshold = all candidates failed the "
+            "meaningfulness floor; outranked = lost the global ranking; "
+            "capped = hit the per-file cap (see seed_count)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +264,14 @@ class QuizQuestionMetadata(BaseModel):
 
     retrieval: RetrievalMetadata
     generation: GenerationMetadata
+    # Claude Sonnet judge (primary — out-family with GPT-4o generator)
     verification: Optional[VerificationMetadata] = None
+    pedagogy: Optional[PedagogyMetadata] = None
+    correctness: Optional[CorrectnessMetadata] = None
+    # GPT panel judge (QUIZ_GPT_JUDGE_MODEL, default gpt-5-mini)
+    verification_gpt: Optional[VerificationMetadata] = None
+    pedagogy_gpt: Optional[PedagogyMetadata] = None
+    correctness_gpt: Optional[CorrectnessMetadata] = None
     human_rating: Optional[HumanRatingMetadata] = None
 
 
@@ -163,6 +294,21 @@ class QuizGenerateResponse(BaseModel):
     warnings: List[str] = Field(
         default_factory=list,
         description="Non-fatal warnings (e.g. seed sampling fell back to replacement).",
+    )
+    file_contributions: List[FileContribution] = Field(
+        default_factory=list,
+        description=(
+            "Per-file seed contribution (quality-plan.md §6.2). Empty for the "
+            "random-baseline seed strategy."
+        ),
+    )
+    diversity: dict = Field(
+        default_factory=dict,
+        description=(
+            "Quiz-level diversity metrics (quality-plan.md §8.1), e.g. "
+            "{'mean_pairwise_similarity': .., 'max_pairwise_similarity': ..}. "
+            "Populated in Phase 4."
+        ),
     )
 
 

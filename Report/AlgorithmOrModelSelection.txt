@@ -1,0 +1,182 @@
+================================================================================
+ALGORITHM / MODEL SELECTION
+================================================================================
+
+OVERVIEW
+--------------------------------------------------------------------------------
+This section documents the algorithms and models selected for the quiz-generation
+and evaluation system, together with the rationale for each choice. The selections
+fall into four groups:
+
+  A. The retrieval framework and the two retrieval algorithms being compared.
+  B. The seed-selection algorithm that chooses what each question is about.
+  C. The language and embedding models (generator, embeddings, and judges).
+  D. The scoring and evaluation algorithms.
+
+The guiding principle behind every choice is a controlled comparison: the corpus,
+the generator, the prompts, and the scoring are all held constant, so that the
+only variable between the two systems under test is HOW context is retrieved.
+
+
+A. RETRIEVAL FRAMEWORK AND ALGORITHMS UNDER COMPARISON
+--------------------------------------------------------------------------------
+A.1 Framework: LightRAG
+  The system is built on LightRAG, a retrieval-augmented generation framework that
+  constructs, from a single document set, both (i) a vector store of chunk
+  embeddings and (ii) an entity-relation knowledge graph. A single framework
+  exposing multiple retrieval modes over the same underlying corpus is what makes
+  the experiment possible: the corpus, generator, and prompts can be fixed while
+  the retrieval strategy alone is varied. This isolates the effect of graph-based
+  retrieval, which is the central question of the study.
+
+A.2 The two retrieval arms (the algorithms being selected between)
+  The study compares two retrieval algorithms, each generating questions from the
+  same corpus:
+
+  - MIX ARM (graph-augmented): a custom breadth-first search (BFS) traversal over
+    the knowledge graph. Starting from a seed entity, the algorithm expands the
+    surrounding subgraph of entities and relations and combines it with vector
+    chunks. The retrieved subgraph supplies the multi-hop context a question is
+    generated from.
+
+  - NAIVE ARM (vector-only): controlled top-k vector retrieval with no graph
+    access. A fixed number of the most similar chunks is retrieved and passed to
+    the generator.
+
+A.3 Structural operationalisation of difficulty
+  Difficulty is operationalised STRUCTURALLY at retrieval time, not linguistically
+  in the prompt. This is a deliberate methodological choice: it ties "difficulty"
+  to the amount and depth of context a question genuinely requires, rather than to
+  surface wording.
+    - Mix:   BFS hop depth  easy -> 1, medium -> 2, hard -> 3
+             (vector chunks held constant at 5).
+    - Naive: chunk count    easy -> 1, medium -> 2, hard -> 3.
+
+A.4 Arm-separation invariant
+  The naive arm has no knowledge of the graph: its scoring and retrieval use only
+  chunk content. All other components - prompts, artifact filters, diagnostics, and
+  scoring - are applied identically to both arms. The only intended difference
+  between the two systems is the retrieval algorithm, which keeps the comparison
+  fair and attributable.
+
+
+B. SEED-SELECTION ALGORITHM (PEDAGOGICAL SEEDING)
+--------------------------------------------------------------------------------
+Before any question is generated, the system selects the entity or chunk the
+question will be built around (the "seed"). A pedagogical seed-selection algorithm
+was chosen so that questions cover important, well-distributed concepts rather than
+arbitrary fragments.
+
+Pipeline: RRF fusion -> diversity clustering -> Cap+Merit+Floor allocation.
+
+B.1 Reciprocal Rank Fusion (RRF)
+  Candidate seeds are ranked by several heterogeneous signals, and the rankings are
+  fused with Reciprocal Rank Fusion:
+        score = sum_s  w_s / (k + rank_s),   with uniform weights and k = 60.
+  RRF was selected because it combines differently-scaled signals by rank rather
+  than by raw value, so no signal normalisation is required and no single signal
+  dominates.
+
+B.2 Per-arm scoring signals
+  Each arm scores candidates using signals appropriate to its own machinery:
+    - Mix signals:   in-scope subgraph degree, number of distinct source documents,
+                     and distinct-chunk frequency. An anti-hub guard down-ranks
+                     very high-degree entities so generic hubs (e.g. "System",
+                     "Process") do not dominate the quiz.
+    - Naive signals: prose quality (not a bare image/table anchor), term density
+                     (acronyms and title-case phrases), and explanatory connectives.
+
+B.3 Diversity clustering
+  Candidate seeds are grouped by greedy cosine-similarity clustering and laid out
+  round-robin across clusters, spreading the selected seeds across distinct topics
+  and reducing near-duplicate questions.
+
+B.4 Cap + Merit + Floor allocation
+  Final selection balances three constraints: Merit (RRF rank order), Floor
+  (minimum quality thresholds), and Cap (no single source file may contribute more
+  than 40% of the questions). Selection uses no padding - a small candidate pool
+  simply yields a smaller quiz rather than forcing weak seeds in.
+
+B.5 Optional LLM importance re-ranking
+  An optional re-ranking stage scores the top candidates 1-10 for educational
+  importance and folds this in as an additional weighted signal. It runs at
+  temperature 0 and is disk-cached, so it does not compromise reproducibility.
+
+
+C. MODEL SELECTION
+--------------------------------------------------------------------------------
+C.1 Summary
+
+  +------------------+-----------------------+------------------------------------+
+  | Component        | Model                 | Selection rationale                |
+  +------------------+-----------------------+------------------------------------+
+  | Question         | gpt-4o-mini           | Reliable instruction-following and |
+  | generator        | (prompt template v7)  | JSON-mode output at low cost,      |
+  |                  |                       | feasible for a 300-question matrix.|
+  +------------------+-----------------------+------------------------------------+
+  | Embeddings       | text-embedding-3-     | High-quality 3072-dimension        |
+  |                  | large (3072-dim)      | embeddings used for retrieval and  |
+  |                  |                       | for diversity scoring.             |
+  +------------------+-----------------------+------------------------------------+
+  | Verifier /       | claude-sonnet-4-6     | Cross-family with the generator to |
+  | Judge A          |                       | avoid self-grading circularity.    |
+  +------------------+-----------------------+------------------------------------+
+  | Judge B (panel)  | gpt-5-mini            | Independent second judge enabling  |
+  |                  |                       | inter-judge agreement / Cohen's k. |
+  +------------------+-----------------------+------------------------------------+
+
+C.2 Generator: gpt-4o-mini
+  Questions are generated with gpt-4o-mini in JSON mode using locked v7 prompt
+  templates. It was selected for dependable structured-output generation and strong
+  instruction-following at a cost that makes a 300-question matrix practical. The
+  same generator and prompt template are used for both arms, so generation quality
+  is not a confound.
+
+C.3 Embedding model: text-embedding-3-large
+  Chunk and entity embeddings use text-embedding-3-large (3072 dimensions). The same
+  embedding space is reused for vector retrieval, diversity clustering during seed
+  selection, and the pairwise-similarity diversity diagnostic, keeping all
+  semantic-similarity computations consistent.
+
+C.4 Judging panel and the cross-family principle
+  Question quality is assessed by a two-model judge panel:
+    - Judge A (primary verifier): claude-sonnet-4-6.
+    - Judge B (panel second leg):  gpt-5-mini.
+  The verifier is from a DIFFERENT model family than the generator. This is the key
+  model-selection decision: it avoids self-grading circularity, in which a model
+  would effectively grade output from its own family. Running a second independent
+  judge in parallel additionally allows inter-judge agreement (and, on the
+  human-rated subsample, Cohen's kappa) to be reported, rather than relying on a
+  single grader.
+
+
+D. SCORING AND EVALUATION ALGORITHMS
+--------------------------------------------------------------------------------
+D.1 Hybrid LLM + deterministic scoring
+  The judge models are used only to MEASURE observable properties of each question
+  (actual retrieval complexity, actual reasoning type, and whether the answer is
+  grounded in the retrieved context). The pass/fail "claimed-versus-actual" match
+  decisions are then computed DETERMINISTICALLY, removing judge subjectivity from
+  the verdict:
+    - Complexity match: a floor rule - a question claiming "hard" must genuinely
+      require >= 3 distinct pieces of context.
+    - Reasoning match: an accepted-set rule - e.g. a "hard"/causal claim is matched
+      by causal or analytical reasoning, and by inferential reasoning only when the
+      question is genuinely multi-piece.
+
+D.2 Model-free diagnostics
+  Several deterministic, reproducible quality signals are computed directly from the
+  question and its context, independent of any model:
+    - source lexical overlap (stopword-filtered Jaccard between question and source);
+    - clarity heuristic (single-focus / brevity score);
+    - figure-dependency estimate (whether the answer relies on a figure/table);
+    - pairwise-cosine diversity (mean and maximum similarity across a quiz cell).
+
+D.3 Reproducibility controls
+  The selections are made reproducible by: seeding the random number generator from
+  the (mode, document-set) pair; running all scoring and re-ranking calls at
+  temperature 0; disk-caching the LLM importance scores; and tagging the prompt
+  version on every generated question. The full 2 x 3 x 50 matrix can therefore be
+  regenerated deterministically.
+
+================================================================================
