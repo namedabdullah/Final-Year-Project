@@ -1,0 +1,76 @@
+# The Learning SAMpai — data + parsing services only (host-dev mode).
+#
+# Use this when running the api (uvicorn) and web (vite) ON THE HOST with hot reload.
+# All ports are published to localhost, so the host-run api connects via localhost:
+#   NEO4J_URI=bolt://localhost:7687  QDRANT_URL=http://localhost:6333
+#   REDIS_URI=redis://localhost:6379  APP_DATABASE_URL=...@localhost:5432/sampai
+#   MINERU_LOCAL_ENDPOINT=http://localhost:8000  DOCLING_ENDPOINT=http://localhost:5001
+#
+#   sampai/docker/scripts/mineru-autoselect.(sh|ps1)
+#   docker compose -f sampai/docker/docker-compose.dev.yml up -d
+
+name: sampai-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sampai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sampai}
+      POSTGRES_DB: ${POSTGRES_DB:-sampai}
+    # Host 5432 is taken by a native PostgreSQL on this machine → publish on 5433.
+    ports: ["5433:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sampai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-please-change}
+      NEO4J_PLUGINS: '["apoc"]'
+    ports: ["7474:7474", "7687:7687"]
+    volumes: ["neo4jdata:/data"]
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports: ["6333:6333"]
+    volumes: ["qdrantdata:/qdrant/storage"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+    restart: unless-stopped
+
+  docling:
+    image: ${DOCLING_IMAGE:-ghcr.io/docling-project/docling-serve-cpu:main}
+    ports: ["5001:5001"]
+    environment:
+      DOCLING_SERVE_PORT: "5001"
+    volumes: ["doclingcache:/root/.cache"]
+    restart: unless-stopped
+
+  mineru:
+    image: ${MINERU_IMAGE:-mineru-cpu:latest}   # CPU mineru-api build (pipeline backend)
+    ports: ["8000:8000"]
+    env_file:
+      - path: ./mineru.generated.env
+        required: false
+    volumes: ["mineru_models:/root/.cache"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  neo4jdata:
+  qdrantdata:
+  redisdata:
+  doclingcache:
+  mineru_models:
