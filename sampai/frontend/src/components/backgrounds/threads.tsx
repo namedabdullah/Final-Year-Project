@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Renderer, Program, Mesh, Triangle, Color } from "ogl"
+import { cappedDpr, frameGate } from "./anim-utils"
 
 const vertexShader = `
 attribute vec2 position;
@@ -109,7 +110,7 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
     if (!containerRef.current) return
     const container = containerRef.current
 
-    const renderer = new Renderer({ alpha: true })
+    const renderer = new Renderer({ alpha: true, dpr: cappedDpr(1.5) })
     const gl = renderer.gl
     gl.clearColor(0, 0, 0, 0)
     gl.enable(gl.BLEND)
@@ -157,7 +158,10 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
       container.addEventListener("mouseleave", handleMouseLeave)
     }
 
+    const shouldRender = frameGate(30)
     function update(t: number) {
+      animationFrameId.current = requestAnimationFrame(update)
+      if (!shouldRender(t)) return
       if (enableMouseInteraction) {
         const smoothing = 0.05
         currentMouse[0] += smoothing * (targetMouse[0] - currentMouse[0])
@@ -170,7 +174,6 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
       }
       program.uniforms.iTime.value = t * 0.001
       renderer.render({ scene: mesh })
-      animationFrameId.current = requestAnimationFrame(update)
     }
     animationFrameId.current = requestAnimationFrame(update)
 

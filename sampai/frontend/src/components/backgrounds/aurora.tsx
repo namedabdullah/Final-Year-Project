@@ -1,5 +1,6 @@
 import { Renderer, Program, Mesh, Color, Triangle } from "ogl"
 import { useEffect, useRef } from "react"
+import { cappedDpr, frameGate } from "./anim-utils"
 
 const VERT = `#version 300 es
 in vec2 position;
@@ -128,7 +129,8 @@ export default function Aurora(props: AuroraProps) {
     const renderer = new Renderer({
       alpha: true,
       premultipliedAlpha: true,
-      antialias: true,
+      antialias: false,
+      dpr: cappedDpr(1.25),
     })
     const gl = renderer.gl
     gl.clearColor(0, 0, 0, 0)
@@ -175,8 +177,10 @@ export default function Aurora(props: AuroraProps) {
     ctn.appendChild(gl.canvas)
 
     let animateId = 0
+    const shouldRender = frameGate(30)
     const update = (t: number) => {
       animateId = requestAnimationFrame(update)
+      if (!shouldRender(t)) return
       const { speed = 1.0 } = propsRef.current
       program.uniforms.uTime.value = t * 0.001 * speed * 0.1
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0

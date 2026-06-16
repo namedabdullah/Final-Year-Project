@@ -5,6 +5,7 @@ import { Brain, Zap, Target, TrendingUp } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
 import Orb from "@/components/backgrounds/orb"
 import LightRays from "@/components/backgrounds/light-rays"
+import { LazyVisual } from "@/components/landingpage/lazy-visual"
 
 export function SolutionSection() {
   const ref = useRef(null)
@@ -14,26 +15,26 @@ export function SolutionSection() {
   const features = [
     {
       icon: Brain,
-      title: "Monitors Progress",
-      description: "Continuously tracks each learner's journey",
+      title: "Knowledge Graph RAG",
+      description: "Documents are indexed into a graph — entities, relationships, and chunks — for precise answers",
       hue: 260,
     },
     {
       icon: Zap,
-      title: "Real-Time Adaptation",
-      description: "Adjusts curriculum dynamically",
+      title: "Instant Q&A",
+      description: "Students ask questions and get answers sourced directly from the uploaded course material",
       hue: 220,
     },
     {
       icon: Target,
-      title: "Personalized Explanations",
-      description: "Provides tailored hints and guidance",
+      title: "Auto Study Tools",
+      description: "Quizzes, flashcards, and mind maps generated automatically from any uploaded file",
       hue: 280,
     },
     {
       icon: TrendingUp,
-      title: "Teacher Support",
-      description: "Automates content creation and analytics",
+      title: "Organised Classrooms",
+      description: "Content is grouped into classrooms and topic folders, keeping every course's material in one place",
       hue: 200,
     },
   ]
@@ -42,7 +43,7 @@ export function SolutionSection() {
 
   return (
     <section ref={ref} className="relative py-20 sm:py-32 overflow-hidden">
-      <div className="absolute inset-0 opacity-40 dark:opacity-50">
+      <LazyVisual className="absolute inset-0 opacity-40 dark:opacity-50">
         <LightRays
           key={theme}
           raysOrigin="top-center"
@@ -53,7 +54,7 @@ export function SolutionSection() {
           pulsating={true}
           fadeDistance={0.7}
         />
-      </div>
+      </LazyVisual>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -67,8 +68,8 @@ export function SolutionSection() {
             Solution
           </h2>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            The Learning SAMpai transforms education into a dynamic, adaptive experience using AI, RAG, and data-driven
-            learning intelligence.
+            The Learning SAMpai turns your uploaded course content into a searchable knowledge base — so every
+            answer, quiz, and flashcard is grounded in your actual course content.
           </p>
         </motion.div>
 
@@ -82,7 +83,7 @@ export function SolutionSection() {
               className="relative group"
             >
               <div className="relative h-[280px] rounded-2xl overflow-hidden">
-                <div className="absolute inset-0">
+                <LazyVisual className="absolute inset-0">
                   <Orb
                     key={theme}
                     hue={feature.hue}
@@ -90,7 +91,7 @@ export function SolutionSection() {
                     rotateOnHover={true}
                     forceHoverState={false}
                   />
-                </div>
+                </LazyVisual>
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-transparent via-background/20 to-background/60 backdrop-blur-[2px] group-hover:backdrop-blur-[1px] transition-all duration-300">
                   <div className="w-14 h-14 rounded-xl bg-background/80 backdrop-blur-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">

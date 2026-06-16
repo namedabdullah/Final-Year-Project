@@ -206,7 +206,7 @@ export default function Stack({
                     <div className="flex items-center gap-2 mt-3">
                       <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">AI-assisted</span>
                       <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                        Teacher tool
+                        Capability
                       </span>
                     </div>
                   ) : null}

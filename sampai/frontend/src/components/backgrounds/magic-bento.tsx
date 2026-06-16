@@ -297,8 +297,24 @@ const GlobalSpotlight = ({
     document.body.appendChild(spotlight)
     spotlightRef.current = spotlight
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!spotlightRef.current || !gridRef.current) return
+    // The raw mousemove fires far more often than once per frame, and each call
+    // reads layout (getBoundingClientRect per card) + runs gsap tweens. Batch it
+    // into a single rAF tick and reuse the cached card NodeList to avoid the
+    // layout thrashing that competes with scroll compositing.
+    let rafId = 0
+    let lastEvent: MouseEvent | null = null
+    let cachedCards: HTMLElement[] = []
+    const getCards = () => {
+      if (!cachedCards.length && gridRef.current) {
+        cachedCards = Array.from(gridRef.current.querySelectorAll(".card")) as HTMLElement[]
+      }
+      return cachedCards
+    }
+
+    const processMove = () => {
+      rafId = 0
+      const e = lastEvent
+      if (!e || !spotlightRef.current || !gridRef.current) return
       const section = gridRef.current.closest(".bento-section")
       const rect = section?.getBoundingClientRect()
       const mouseInside =
@@ -306,8 +322,8 @@ const GlobalSpotlight = ({
 
       if (!mouseInside) {
         gsap.to(spotlightRef.current, { opacity: 0, duration: 0.3, ease: "power2.out" })
-        gridRef.current.querySelectorAll(".card").forEach((card) => {
-          (card as HTMLElement).style.setProperty("--glow-intensity", "0")
+        getCards().forEach((card) => {
+          card.style.setProperty("--glow-intensity", "0")
         })
         return
       }
@@ -315,8 +331,7 @@ const GlobalSpotlight = ({
       const { proximity, fadeDistance } = calculateSpotlightValues(spotlightRadius)
       let minDistance = Number.POSITIVE_INFINITY
 
-      gridRef.current.querySelectorAll(".card").forEach((card) => {
-        const cardEl = card as HTMLElement
+      getCards().forEach((cardEl) => {
         const cardRect = cardEl.getBoundingClientRect()
         const centerX = cardRect.left + cardRect.width / 2
         const centerY = cardRect.top + cardRect.height / 2
@@ -349,9 +364,14 @@ const GlobalSpotlight = ({
       })
     }
 
+    const handleMouseMove = (e: MouseEvent) => {
+      lastEvent = e
+      if (!rafId) rafId = requestAnimationFrame(processMove)
+    }
+
     const handleMouseLeave = () => {
-      gridRef.current?.querySelectorAll(".card").forEach((card) => {
-        (card as HTMLElement).style.setProperty("--glow-intensity", "0")
+      getCards().forEach((card) => {
+        card.style.setProperty("--glow-intensity", "0")
       })
       if (spotlightRef.current) {
         gsap.to(spotlightRef.current, { opacity: 0, duration: 0.3, ease: "power2.out" })
@@ -362,6 +382,7 @@ const GlobalSpotlight = ({
     document.addEventListener("mouseleave", handleMouseLeave)
 
     return () => {
+      if (rafId) cancelAnimationFrame(rafId)
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseleave", handleMouseLeave)
       spotlightRef.current?.parentNode?.removeChild(spotlightRef.current)

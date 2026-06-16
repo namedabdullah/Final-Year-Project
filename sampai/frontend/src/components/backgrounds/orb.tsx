@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Renderer, Program, Mesh, Triangle, Vec3 } from "ogl"
+import { frameGate } from "./anim-utils"
 
 export default function Orb({ hue = 0, hoverIntensity = 0.2, rotateOnHover = true, forceHoverState = false }) {
   const ctnDom = useRef(null)
@@ -246,8 +247,10 @@ export default function Orb({ hue = 0, hoverIntensity = 0.2, rotateOnHover = tru
     container.addEventListener("mouseleave", handleMouseLeave)
 
     let rafId: number
+    const shouldRender = frameGate(30)
     const update = (t: number) => {
       rafId = requestAnimationFrame(update)
+      if (!shouldRender(t)) return
       const dt = Math.min((t - lastTime) * 0.001, 0.033)
       lastTime = t
       program.uniforms.iTime.value += dt

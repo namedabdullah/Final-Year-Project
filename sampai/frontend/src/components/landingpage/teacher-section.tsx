@@ -1,9 +1,10 @@
 import { motion, useInView } from "framer-motion"
 import { useRef, useState, useEffect } from "react"
-import { FileEdit, CheckCircle, BarChart3, Lightbulb, Palette, Shield, MessageCircle } from "lucide-react"
+import { BookOpen, Upload, FlaskConical, Layers, GitBranch, Megaphone, FolderOpen } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
 import Stack from "@/components/backgrounds/stack"
 import Plasma from "@/components/backgrounds/plasma"
+import { LazyVisual } from "@/components/landingpage/lazy-visual"
 
 export function TeacherSection() {
   const ref = useRef(null)
@@ -24,70 +25,70 @@ export function TeacherSection() {
     return () => window.removeEventListener("resize", update)
   }, [])
 
-  const teacherCards = [
+  const capabilityCards = [
     {
       id: 1,
-      title: "AI-Assisted Content Authoring",
-      subtitle: "Summaries, quizzes, flashcards",
+      title: "Classroom Spaces",
+      subtitle: "Organised per course",
       details:
-        "Upload lesson material. SAMpai drafts summaries, quizzes, flashcards, diagrams, and tailored examples aligned to your syllabus. Expand to see workflow tips and best practices.",
-      icon: FileEdit,
+        "Content is grouped into classroom spaces with invite-based access, so every course's material stays in one place and relevant to the people enrolled.",
+      icon: BookOpen,
     },
     {
       id: 2,
-      title: "Automated Grading & Feedback",
-      subtitle: "Instant and in-depth",
+      title: "Document Ingestion",
+      subtitle: "PDF, DOCX, PPTX, XLSX",
       details:
-        "Objective items graded instantly. Essays receive rubric-based feedback, highlights, and correction suggestions. Expand for configurable rubrics and feedback tone.",
-      icon: CheckCircle,
+        "Uploaded files are parsed and indexed into a knowledge graph by LightRAG — making every page instantly queryable instead of sitting unread in a folder.",
+      icon: Upload,
     },
     {
       id: 3,
-      title: "Student Analytics Dashboard",
-      subtitle: "Heatmaps & trends",
+      title: "Quiz Generation",
+      subtitle: "MCQ & short-answer",
       details:
-        "Spot struggling topics early via mastery trends, cohort comparisons, and prediction signals. Expand for intervention suggestions and pacing insights.",
-      icon: BarChart3,
+        "Multiple-choice quizzes are generated from a single file, or cross-file short-answer quizzes that draw on everything uploaded to the classroom.",
+      icon: FlaskConical,
     },
     {
       id: 4,
-      title: "Adaptive Lesson Planning",
-      subtitle: "Recommend interventions",
+      title: "Flashcard Generation",
+      subtitle: "Key concepts, auto-extracted",
       details:
-        "SAMpai recommends tweaks and targeted practice based on performance signals. Expand for scaffold templates and differentiation playbooks.",
-      icon: Lightbulb,
+        "Key terms, definitions, and concepts are pulled from any uploaded file and turned into ready-to-use flashcards — no manual work involved.",
+      icon: Layers,
     },
     {
       id: 5,
-      title: "AI-Generated Teaching Aids",
-      subtitle: "Visuals and analogies",
+      title: "Mind Map Generation",
+      subtitle: "Visual concept maps",
       details:
-        "Generate diagrams, visualizations, and relatable analogies customized to your unit objectives. Expand for export options and variants.",
-      icon: Palette,
+        "A visual map shows how topics in a document connect, making relationships between concepts easy to see and the big picture easy to grasp.",
+      icon: GitBranch,
     },
     {
       id: 6,
-      title: "Plagiarism & Similarity",
-      subtitle: "Semantic checks",
+      title: "Announcements",
+      subtitle: "Broadcast to the class",
       details:
-        "Detect copy-paste and paraphrase via semantic similarity. Expand for threshold controls and actionable flags.",
-      icon: Shield,
+        "Updates posted to a classroom are visible to everyone enrolled — deadlines, reminders, and important notices all in one place.",
+      icon: Megaphone,
     },
     {
       id: 7,
-      title: "Classroom Companion Mode",
-      subtitle: "Summaries & FAQs",
+      title: "Folder Organisation",
+      subtitle: "Structure course content",
       details:
-        "Live summaries of discussions with automatic FAQs and follow-ups. Expand to configure prompts and handouts.",
-      icon: MessageCircle,
+        "Files are grouped into topic folders, with folder-level quizzes that span every file inside for broader, mixed practice.",
+      icon: FolderOpen,
     },
   ]
 
   const plasmaColor = theme === "dark" ? "#60a5fa" : "#3b82f6"
 
   return (
-    <section id="teachers" ref={ref} className="relative py-20 sm:py-32 overflow-hidden">
-      <div className="absolute inset-0 -z-10 opacity-80">
+    <section id="capabilities" ref={ref} className="relative py-20 sm:py-32 overflow-hidden">
+      <LazyVisual className="absolute inset-0 -z-10 opacity-80">
         <Plasma
           key={theme}
           color={plasmaColor}
@@ -97,7 +98,7 @@ export function TeacherSection() {
           opacity={0.6}
           mouseInteractive={false}
         />
-      </div>
+      </LazyVisual>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -107,12 +108,12 @@ export function TeacherSection() {
           className="text-center mb-14"
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 text-balance">
-            Empowering{" "}
-            <span className="bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">Teachers</span>{" "}
-            with AI
+            What{" "}
+            <span className="bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">SAMpai</span>{" "}
+            Can Do
           </h2>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed text-pretty">
-            A modern toolkit to author faster, assess better, and discover insights—right inside your stack.
+            Course material goes in once. SAMpai turns it into quizzes, flashcards, mind maps, and a classroom chat — every output grounded in the uploaded content.
           </p>
         </motion.div>
 
@@ -124,7 +125,7 @@ export function TeacherSection() {
         >
           <div className="relative">
             <Stack
-              cardsData={teacherCards}
+              cardsData={capabilityCards}
               cardDimensions={cardDims}
               randomRotation={true}
               sensitivity={160}

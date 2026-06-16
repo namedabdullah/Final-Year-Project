@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
 import DotGrid from "@/components/backgrounds/dot-grid"
+import { LazyVisual } from "@/components/landingpage/lazy-visual"
 
 export function CTASection() {
   const ref = useRef(null)
@@ -17,14 +18,16 @@ export function CTASection() {
   return (
     <section id="cta" ref={ref} className="relative py-20 sm:py-32 overflow-hidden">
       <div className="absolute inset-0">
-        <DotGrid
-          className="absolute inset-0 p-0 pointer-events-none opacity-35"
-          dotSize={10}
-          gap={18}
-          baseColor={baseColor}
-          activeColor={activeColor}
-          proximity={120}
-        />
+        <LazyVisual className="absolute inset-0">
+          <DotGrid
+            className="absolute inset-0 p-0 pointer-events-none opacity-35"
+            dotSize={10}
+            gap={18}
+            baseColor={baseColor}
+            activeColor={activeColor}
+            proximity={120}
+          />
+        </LazyVisual>
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/20 to-background/60 pointer-events-none" />
       </div>
 
@@ -37,19 +40,19 @@ export function CTASection() {
         >
           <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8">
             <Sparkles className="w-4 h-4 text-chart-1" />
-            <span className="text-sm font-medium">Join the Future of Learning</span>
+            <span className="text-sm font-medium">Your Course. Your AI.</span>
           </div>
 
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-            Learn. Grow. Evolve —{" "}
+            Study Smarter —{" "}
             <span className="bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">
               with The Learning SAMpai
             </span>
           </h2>
 
           <p className="text-lg sm:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-            Because it's not just another LMS — it's a living, learning system that evolves with every student and
-            teacher.
+            Join a classroom and get instant AI-powered answers, quizzes, and flashcards —
+            all grounded in your actual course material.
           </p>
 
           <motion.div
@@ -63,17 +66,8 @@ export function CTASection() {
                 size="lg"
                 className="text-base px-8 py-6 cursor-pointer bg-gradient-to-r from-chart-1 to-chart-2 hover:opacity-90 transition-all duration-300 group"
               >
-                Start Learning Today
+                Get Started Free
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link to="/signup">
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-base px-8 py-6 cursor-pointer border-2 hover:bg-accent transition-all duration-300 bg-transparent"
-              >
-                Schedule a Demo
               </Button>
             </Link>
           </motion.div>

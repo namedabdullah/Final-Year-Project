@@ -4,6 +4,7 @@ import { Database, Brain, Sparkles, TrendingUp } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
 import Aurora from "@/components/backgrounds/aurora"
 import MagicBento from "@/components/backgrounds/magic-bento"
+import { LazyVisual } from "@/components/landingpage/lazy-visual"
 
 export function HowItWorksSection() {
   const ref = useRef(null)
@@ -23,29 +24,29 @@ export function HowItWorksSection() {
     () => [
       {
         color: "#030712",
-        title: "RAG Retrieval",
-        description: "Fetch the most relevant passages from the knowledge base in real time.",
+        title: "Upload Course Material",
+        description: "Course materials — PDFs, slides, and notes — are uploaded once. LightRAG parses and indexes every page.",
         label: "Step 1",
         icon: Database,
       },
       {
         color: "#030712",
-        title: "Understand Context",
-        description: "Infer student intent and level to tailor the next response.",
+        title: "Knowledge Graph Built",
+        description: "Content is chunked, embedded, and stored across Neo4j, Qdrant, and Redis — ready to query.",
         label: "Step 2",
         icon: Brain,
       },
       {
         color: "#030712",
-        title: "Generate Response",
-        description: "Compose explanations, diagrams, or quizzes grounded in retrieved knowledge.",
+        title: "Student Asks a Question",
+        description: "LightRAG retrieves the most relevant passages from the knowledge graph in real time.",
         label: "Step 3",
         icon: Sparkles,
       },
       {
         color: "#030712",
-        title: "Feedback Loop",
-        description: "Measure outcomes and adapt future content for continuous improvement.",
+        title: "Grounded Answer Delivered",
+        description: "The AI generates a response citing only what's in the course material — no internet hallucinations.",
         label: "Step 4",
         icon: TrendingUp,
       },
@@ -56,9 +57,9 @@ export function HowItWorksSection() {
   return (
     <section id="how-it-works" ref={ref} className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0" aria-hidden="true">
-        <div className="h-48 sm:h-56 md:h-72 lg:h-80 w-screen">
+        <LazyVisual className="h-48 sm:h-56 md:h-72 lg:h-80 w-screen">
           <Aurora key={theme} colorStops={auroraStops} amplitude={1.0} blend={0.55} speed={0.85} />
-        </div>
+        </LazyVisual>
         <div className="absolute inset-x-0 -bottom-1 h-16 bg-gradient-to-b from-transparent to-background" />
       </div>
 
@@ -75,7 +76,7 @@ export function HowItWorksSection() {
               <span className="bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">Works</span>
             </h2>
             <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed text-pretty">
-              Powered by advanced RAG technology and machine learning
+              From document upload to grounded answer — here's what happens under the hood
             </p>
           </motion.div>
 

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useMemo } from "react"
+import { frameGate } from "./anim-utils"
 
 function hexToRgb(hex: string) {
   const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
@@ -79,7 +80,10 @@ const DotGrid = ({
     const circlePath = new Path2D()
     circlePath.arc(0, 0, dotSize / 2, 0, Math.PI * 2)
 
-    const draw = () => {
+    const shouldRender = frameGate(30)
+    const draw = (t: number) => {
+      rafId = requestAnimationFrame(draw)
+      if (!shouldRender(t)) return
       const canvas = canvasRef.current
       if (!canvas) return
       const ctx = canvas.getContext("2d")
@@ -105,10 +109,9 @@ const DotGrid = ({
         ctx.fill(circlePath)
         ctx.restore()
       }
-      rafId = requestAnimationFrame(draw)
     }
 
-    draw()
+    rafId = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(rafId)
   }, [proximity, baseColor, activeColor, baseRgb, activeRgb, dotSize])
 

@@ -1,9 +1,10 @@
 import type React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Route, MessageSquare, FlaskConical, FileCheck, Trophy, Users, AlertTriangle, Clock } from "lucide-react"
+import { MessageSquare, FlaskConical, Layers, GitBranch, Users, FolderOpen } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
 import Squares from "@/components/backgrounds/squares"
+import { LazyVisual } from "@/components/landingpage/lazy-visual"
 
 export function FeaturesSection() {
   const { theme } = useTheme()
@@ -14,45 +15,40 @@ export function FeaturesSection() {
 
   const features = [
     {
-      icon: Route,
-      title: "Personalized Learning Pathways",
-      description:
-        "AI dynamically adjusts lesson sequences based on performance, bringing in simpler explanations when needed.",
-    },
-    {
       icon: MessageSquare,
-      title: "Context-Aware Explanations",
-      description: "Adaptive answers that explain step-by-step and switch between summary, in-depth, or visual modes.",
+      title: "RAG-Powered Classroom Chat",
+      description:
+        "Ask any question about your course and get an answer sourced directly from your uploaded materials — not the internet.",
     },
     {
       icon: FlaskConical,
-      title: "Adaptive Practice & Quizzing",
-      description: "Generates new questions each time, adjusting difficulty automatically with hints and solutions.",
+      title: "Auto-Generated Quizzes",
+      description:
+        "Multiple-choice and short-answer quizzes generated from individual files or across all classroom materials.",
     },
     {
-      icon: FileCheck,
-      title: "AI Feedback on Student Work",
-      description: "Upload code, essays, or solutions. AI evaluates, points out errors, and suggests improvements.",
+      icon: Layers,
+      title: "Smart Flashcards",
+      description:
+        "Key concepts and definitions extracted from any uploaded file and turned into ready-to-use flashcards.",
     },
     {
-      icon: Trophy,
-      title: "Gamified Progress Dashboard",
-      description: "Earn badges, streaks, and levels. AI recommends challenges based on recent activity.",
+      icon: GitBranch,
+      title: "Mind Maps",
+      description:
+        "Visual concept maps generated from course documents to show how topics and ideas connect to each other.",
     },
     {
       icon: Users,
-      title: "Peer + AI Hybrid Study Rooms",
-      description: "Collaborate in real-time with AI moderation, summaries, and follow-up suggestions.",
+      title: "Group Chat",
+      description:
+        "Collaborate with classmates in real time, @mention each other, and discuss course material together.",
     },
     {
-      icon: AlertTriangle,
-      title: "Error-Aware Practice Mode",
-      description: "AI intervenes at the exact point of error, explaining what went wrong for better understanding.",
-    },
-    {
-      icon: Clock,
-      title: "Micro-Learning & Smart Reminders",
-      description: 'Breaks lessons into daily goals with reminders like "You struggled with recursion yesterday."',
+      icon: FolderOpen,
+      title: "File & Folder Organisation",
+      description:
+        "Course content is organised into folders, and you interact with each file individually via chat, quizzes, and flashcards.",
     },
   ]
 
@@ -123,7 +119,7 @@ export function FeaturesSection() {
       onTouchStart={handleSectionMouseDown}
       onTouchEnd={handleSectionMouseUp}
     >
-      <div className="absolute inset-0 z-0">
+      <LazyVisual className="absolute inset-0 z-0">
         <Squares
           key={theme}
           direction="diagonal"
@@ -132,7 +128,7 @@ export function FeaturesSection() {
           squareSize={50}
           hoverFillColor={squareHoverColor}
         />
-      </div>
+      </LazyVisual>
 
       <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-b from-background/80 via-background/60 to-background/80" />
 
@@ -145,13 +141,13 @@ export function FeaturesSection() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">
-            Powerful Features for{" "}
+            Everything You Need to{" "}
             <span className="bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">
-              Every Learner
+              Study Smarter
             </span>
           </h2>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Experience learning that adapts to you, not the other way around.
+            All built on your actual course content — every answer, quiz, and flashcard comes from your actual course material.
           </p>
           <p className="text-sm text-muted-foreground mt-4 opacity-70">
             {isHoldingSection

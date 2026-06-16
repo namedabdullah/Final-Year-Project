@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useTheme } from '@/hooks/use-theme';
+import { frameGate } from './anim-utils';
 
 type CanvasStrokeStyle = string | CanvasGradient | CanvasPattern;
 
@@ -91,7 +92,10 @@ const Squares: React.FC<SquaresProps> = ({
       }
     };
 
-    const updateAnimation = () => {
+    const shouldRender = frameGate(30);
+    const updateAnimation = (t: number) => {
+      requestRef.current = requestAnimationFrame(updateAnimation);
+      if (!shouldRender(t)) return;
       const effectiveSpeed = Math.max(speed, 0.1);
       switch (direction) {
         case 'right':
@@ -115,7 +119,6 @@ const Squares: React.FC<SquaresProps> = ({
       }
 
       drawGrid();
-      requestRef.current = requestAnimationFrame(updateAnimation);
     };
 
     const handleMouseMove = (event: MouseEvent) => {

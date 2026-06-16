@@ -88,9 +88,9 @@ export function Navbar({ variant = "full", username = "User", onLogout, actions 
                 <Button
                   variant="ghost"
                   className="text-sm font-medium cursor-pointer"
-                  onClick={() => scrollTo("teachers")}
+                  onClick={() => scrollTo("capabilities")}
                 >
-                  For Teachers
+                  Capabilities
                 </Button>
                 <Button
                   variant="ghost"
@@ -233,9 +233,9 @@ export function Navbar({ variant = "full", username = "User", onLogout, actions 
                 <Button
                   variant="ghost"
                   className="w-full justify-start cursor-pointer"
-                  onClick={() => scrollTo("teachers")}
+                  onClick={() => scrollTo("capabilities")}
                 >
-                  For Teachers
+                  Capabilities
                 </Button>
                 <Button
                   variant="ghost"
