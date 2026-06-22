@@ -25,7 +25,7 @@ export function HowItWorksSection() {
       {
         color: "#030712",
         title: "Upload Course Material",
-        description: "Course materials — PDFs, slides, and notes — are uploaded once. LightRAG parses and indexes every page.",
+        description: "Course materials — PDFs, slides, and notes — are uploaded once. SAMpai parses and indexes every page.",
         label: "Step 1",
         icon: Database,
       },
@@ -39,7 +39,7 @@ export function HowItWorksSection() {
       {
         color: "#030712",
         title: "Student Asks a Question",
-        description: "LightRAG retrieves the most relevant passages from the knowledge graph in real time.",
+        description: "SAMpai retrieves the most relevant passages from the knowledge graph in real time.",
         label: "Step 3",
         icon: Sparkles,
       },

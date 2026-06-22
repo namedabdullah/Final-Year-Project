@@ -23,7 +23,7 @@ export function HeroSection() {
             className="inline-flex items-center space-x-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8"
           >
             <Sparkles className="w-4 h-4 text-chart-1" />
-            <span className="text-sm font-medium text-foreground/80">Built on LightRAG · Graph-Based RAG</span>
+            <span className="text-sm font-medium text-foreground/80">Built on SAMpai · Graph-Based RAG</span>
           </motion.div>
 
           <motion.h1
@@ -82,7 +82,7 @@ export function HeroSection() {
             transition={{ duration: 1, delay: 0.5 }}
             className="mt-16 text-sm text-muted-foreground"
           >
-            Powered by LightRAG · Neo4j · Qdrant · Redis
+            Powered by SAMpai · Neo4j · Qdrant · Redis
           </motion.div>
         </div>
       </div>

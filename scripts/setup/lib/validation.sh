@@ -485,7 +485,7 @@ validate_security_config() {
   if ! validate_auth_accounts_password_safety "$auth_accounts"; then
     format_error \
       "AUTH_ACCOUNTS passwords must not start with 'admin' or 'pass'." \
-      "Choose a less predictable password or use lightrag-hash-password to generate a {bcrypt} value."
+      "Choose a less predictable password or use sampai-hash-password to generate a {bcrypt} value."
     return 1
   fi
 

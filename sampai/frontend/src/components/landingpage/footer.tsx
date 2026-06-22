@@ -14,7 +14,7 @@ export function Footer() {
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
               A classroom platform that turns your course materials into instant, AI-powered answers
-              grounded in actual course content — powered by LightRAG.
+              grounded in actual course content — powered by SAMpai.
             </p>
           </div>
 
@@ -47,7 +47,7 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-4">Built With</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>LightRAG</li>
+              <li>SAMpai</li>
               <li>Neo4j</li>
               <li>Qdrant</li>
               <li>React + Vite</li>

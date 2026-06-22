@@ -3,12 +3,12 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lightrag-hku"
+name = "sampai"
 dynamic = ["version"]
 authors = [
     {name = "Zirui Guo"}
 ]
-description = "LightRAG: Simple and Fast Retrieval-Augmented Generation"
+description = "SAMpai: Simple and Fast Retrieval-Augmented Generation"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -129,11 +129,11 @@ offline-llm = [
 
 offline = [
     # Complete offline package (includes api for document processing, plus storage and LLM)
-    "lightrag-hku[api,offline-storage,offline-llm]",
+    "sampai[api,offline-storage,offline-llm]",
 ]
 
 test = [
-    "lightrag-hku[api]",
+    "sampai[api]",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "pre-commit",
@@ -141,7 +141,7 @@ test = [
 ]
 
 evaluation = [
-    "lightrag-hku[api]",
+    "sampai[api]",
     "ragas>=0.3.7",
     "datasets>=4.3.0",
 ]
@@ -154,7 +154,7 @@ observability = [
 # SAMpai classroom layer (lightrag/api/sampai/). Additive — does not affect the
 # core LightRAG package or the bundled server when uninstalled (graft is fail-soft).
 sampai = [
-    "lightrag-hku[api]",                  # FastAPI server + core deps
+    "sampai[api]",                  # FastAPI server + core deps
     # Only the storage backends SAMpai actually uses (not the full offline-storage set).
     "neo4j>=5.0.0,<7.0.0",               # graph store
     "qdrant-client>=1.11.0,<2.0.0",      # vector store
@@ -171,11 +171,11 @@ sampai = [
 ]
 
 [project.scripts]
-lightrag-server = "lightrag.api.lightrag_server:main"
-lightrag-gunicorn = "lightrag.api.run_with_gunicorn:main"
-lightrag-hash-password = "lightrag.tools.hash_password:main"
-lightrag-download-cache = "lightrag.tools.download_cache:main"
-lightrag-clean-llmqc = "lightrag.tools.clean_llm_query_cache:main"
+sampai-server = "lightrag.api.lightrag_server:main"
+sampai-gunicorn = "lightrag.api.run_with_gunicorn:main"
+sampai-hash-password = "lightrag.tools.hash_password:main"
+sampai-download-cache = "lightrag.tools.download_cache:main"
+sampai-clean-llmqc = "lightrag.tools.clean_llm_query_cache:main"
 
 [project.urls]
 Homepage = "https://github.com/HKUDS/LightRAG"

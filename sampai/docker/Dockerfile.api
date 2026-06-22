@@ -27,4 +27,4 @@ EXPOSE 9621
 # single-worker internally). NOTE: do NOT use `uvicorn ...:app` — importing the
 # module triggers LightRAG's argparse, which rejects uvicorn's CLI args.
 # 1 worker — the SAMpai engine registry + WS hub are in-process (see sampai-plan §8).
-CMD ["lightrag-server"]
+CMD ["sampai-server"]

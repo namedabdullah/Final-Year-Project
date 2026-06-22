@@ -123,19 +123,19 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="lightrag-download-cache",
-        description="Download cache files for LightRAG offline deployment",
+        prog="sampai-download-cache",
+        description="Download cache files for SAMpai offline deployment",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Download to default location (~/.tiktoken_cache)
-  lightrag-download-cache
+  sampai-download-cache
 
   # Download to specific directory
-  lightrag-download-cache --cache-dir ./offline_cache/tiktoken
+  sampai-download-cache --cache-dir ./offline_cache/tiktoken
 
   # Download specific models only
-  lightrag-download-cache --models gpt-4o-mini gpt-4
+  sampai-download-cache --models gpt-4o-mini gpt-4
 
 For more information, visit: https://github.com/HKUDS/LightRAG
         """,

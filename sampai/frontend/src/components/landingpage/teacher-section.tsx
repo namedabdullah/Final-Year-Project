@@ -39,7 +39,7 @@ export function TeacherSection() {
       title: "Document Ingestion",
       subtitle: "PDF, DOCX, PPTX, XLSX",
       details:
-        "Uploaded files are parsed and indexed into a knowledge graph by LightRAG — making every page instantly queryable instead of sitting unread in a folder.",
+        "Uploaded files are parsed and indexed into a knowledge graph by SAMpai — making every page instantly queryable instead of sitting unread in a folder.",
       icon: Upload,
     },
     {

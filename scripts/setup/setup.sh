@@ -2610,11 +2610,11 @@ finalize_base_setup() {
       ;;
     delete_compose_and_switch_host)
       remove_existing_compose_file "$existing_compose" || return 1
-      echo "  To start: lightrag-server"
+      echo "  To start: sampai-server"
       ;;
     *)
       if [[ "$show_host_start_hint" == "yes" ]]; then
-        echo "  To start: lightrag-server"
+        echo "  To start: sampai-server"
       fi
       ;;
   esac
@@ -2741,11 +2741,11 @@ finalize_storage_setup() {
       ;;
     delete_compose_and_switch_host)
       remove_existing_compose_file "$existing_compose" || return 1
-      echo "  To start: lightrag-server"
+      echo "  To start: sampai-server"
       ;;
     *)
       if [[ "$show_host_start_hint" == "yes" ]]; then
-        echo "  To start: lightrag-server"
+        echo "  To start: sampai-server"
       fi
       ;;
   esac
@@ -2886,11 +2886,11 @@ finalize_server_setup() {
       ;;
     delete_compose_and_switch_host)
       remove_existing_compose_file "$existing_compose" || return 1
-      echo "  To start: lightrag-server"
+      echo "  To start: sampai-server"
       ;;
     *)
       if [[ "$show_host_start_hint" == "yes" ]]; then
-        echo "  To start: lightrag-server"
+        echo "  To start: sampai-server"
       fi
       ;;
   esac
@@ -3158,7 +3158,7 @@ security_check_env_file() {
     elif ! validate_auth_accounts_password_safety "$auth_accounts"; then
       report_security_issue \
         "AUTH_ACCOUNTS uses a predictable password prefix." \
-        "Passwords must not start with 'admin' or 'pass'. Choose a stronger password or use lightrag-hash-password."
+        "Passwords must not start with 'admin' or 'pass'. Choose a stronger password or use sampai-hash-password."
       findings=$((findings + 1))
     fi
 

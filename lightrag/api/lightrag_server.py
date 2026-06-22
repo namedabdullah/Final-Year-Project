@@ -884,7 +884,7 @@ def create_app(args):
     webui_path = WEBUI_PATH
 
     app_kwargs = {
-        "title": "LightRAG Server API",
+        "title": "SAMpai Server API",
         "description": swagger_description,
         "version": __api_version__,
         "openapi_url": "/openapi.json",
