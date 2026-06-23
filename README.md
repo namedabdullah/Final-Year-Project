@@ -48,8 +48,6 @@ sampai/
   frontend/          React + Vite web app
   mobile/            React Native (Expo) app
   docker/            deployment: compose files, Dockerfiles, nginx
-  SAMpai.md          full feature & schema specification
-  sampai-plan.md     build plan
 ```
 
 ## Running the stack
