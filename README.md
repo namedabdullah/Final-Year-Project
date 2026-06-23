@@ -96,8 +96,3 @@ cd sampai/frontend
 bun install
 bun run dev
 ```
-
-## License
-
-This project is released under the MIT License — see [LICENSE](LICENSE). It builds on
-the open-source [LightRAG](https://github.com/HKUDS/LightRAG) framework (MIT).
